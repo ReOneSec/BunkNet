@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BunkNet Wallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bip39/build/bip39.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/elliptic@6.5.4/dist/elliptic.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.9.0/src/sha256.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans">
+
+    <div id="toast-container" class="fixed top-5 right-5 z-50"></div>
+    
+    <div id="app-container" class="w-full h-screen">
+        </div>
+    
+    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-40 hidden">
+        </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
