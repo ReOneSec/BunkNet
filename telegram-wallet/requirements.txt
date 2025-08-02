@@ -1,0 +1,11 @@
+# Requirements for the BunkNet Telegram Bot
+
+# Loads environment variables from a .env file
+python-dotenv==0.21.1
+pymongo==4.6.1
+requests==2.31.0
+mnemonic==0.20
+ecdsa==0.18.0
+pycryptodome==3.20.0
+python-telegram-bot[job-queue]==21.0.1
+qrcode[pil]==7.4.2
