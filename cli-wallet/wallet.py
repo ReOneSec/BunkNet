@@ -7,7 +7,7 @@ import hashlib
 import binascii
 
 import requests
-from mnemonic import Mnemonic  # ## MODIFIED ##
+from mnemonic import Mnemonic
 from ecdsa import SECP256k1, SigningKey
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
@@ -24,15 +24,14 @@ PBKDF2_ITERATIONS = 100000
 # CRYPTOGRAPHY & WALLET HELPERS
 # =============================================================================
 
-mnemo = Mnemonic("english") # ## NEW ## - Create a Mnemonic instance
+mnemo = Mnemonic("english")
 
 def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
     """Derives an ECDSA private key from a BIP39 mnemonic."""
-    seed = Mnemonic.to_seed(mnemonic) # ## MODIFIED ##
+    seed = Mnemonic.to_seed(mnemonic)
     private_key_bytes = seed[:32]
     return SigningKey.from_string(private_key_bytes, curve=SECP256k1)
 
-# ... (encrypt_data, decrypt_data, save_wallet, load_wallet functions remain exactly the same) ...
 def encrypt_data(data: bytes, password: str) -> bytes:
     salt = get_random_bytes(SALT_SIZE)
     key = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, PBKDF2_ITERATIONS, dklen=AES_KEY_LEN)
@@ -54,6 +53,7 @@ def save_wallet(mnemonic: str, password: str):
     print(f"✅ Wallet saved securely to {WALLET_FILE}")
 
 def load_wallet(password: str) -> SigningKey:
+    """Loads and decrypts the wallet, returning the key pair."""
     if not os.path.exists(WALLET_FILE):
         print(f"❌ Error: Wallet file '{WALLET_FILE}' not found. Generate or import a wallet first.")
         sys.exit(1)
@@ -65,7 +65,20 @@ def load_wallet(password: str) -> SigningKey:
         print("❌ Error: Incorrect password or corrupted wallet file.")
         sys.exit(1)
 
-# ... (API interaction functions remain exactly the same) ...
+# ## NEW ## - Function to load just the mnemonic string
+def load_mnemonic(password: str) -> str:
+    """Loads and decrypts the wallet, returning the mnemonic phrase."""
+    if not os.path.exists(WALLET_FILE):
+        print(f"❌ Error: Wallet file '{WALLET_FILE}' not found.")
+        sys.exit(1)
+    with open(WALLET_FILE, 'rb') as f: encrypted_data = f.read()
+    try:
+        return decrypt_data(encrypted_data, password).decode()
+    except (ValueError, KeyError):
+        print("❌ Error: Incorrect password or corrupted wallet file.")
+        sys.exit(1)
+
+# ... (API interaction functions remain the same) ...
 def get_address_info(address: str):
     try:
         response = requests.get(f"{BFF_API_URL}/address/{address}")
@@ -96,40 +109,27 @@ def send_transaction(key_pair: SigningKey, recipient: str, amount: float, fee: f
 # =============================================================================
 
 def handle_generate(args):
-    """Generates a new wallet."""
-    mnemonic = mnemo.generate(strength=128) # ## MODIFIED ##
-    print("✨ Your New Wallet Seed Phrase ✨")
-    print("=" * 35)
-    print(f"\n{mnemonic}\n")
-    print("=" * 35)
+    mnemonic = mnemo.generate(strength=128)
+    print("✨ Your New Wallet Seed Phrase ✨"); print("=" * 35); print(f"\n{mnemonic}\n"); print("=" * 35)
     print("🛑 IMPORTANT: Write this phrase down and store it securely. It's the only way to recover your wallet.")
     password = getpass.getpass("Enter a strong password to encrypt this wallet: ")
     confirm_password = getpass.getpass("Confirm password: ")
-    if password != confirm_password:
-        print("❌ Passwords do not match.")
-        sys.exit(1)
+    if password != confirm_password: print("❌ Passwords do not match."); sys.exit(1)
     save_wallet(mnemonic, password)
 
 def handle_import(args):
-    """Imports a wallet from a seed phrase."""
     mnemonic = input("Enter your 12-word seed phrase: ").strip()
-    if not mnemo.check(mnemonic): # ## MODIFIED ##
-        print("❌ Invalid seed phrase.")
-        sys.exit(1)
+    if not mnemo.check(mnemonic): print("❌ Invalid seed phrase."); sys.exit(1)
     password = getpass.getpass("Enter a strong password to encrypt this wallet: ")
     confirm_password = getpass.getpass("Confirm password: ")
-    if password != confirm_password:
-        print("❌ Passwords do not match.")
-        sys.exit(1)
+    if password != confirm_password: print("❌ Passwords do not match."); sys.exit(1)
     save_wallet(mnemonic, password)
-
-# ... (handle_address, handle_balance, handle_history, handle_send remain exactly the same) ...
+    
 def handle_address(args):
     password = getpass.getpass("Enter password to unlock wallet: ")
     key_pair = load_wallet(password)
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
-    print("\n🔑 Your BunkNet Public Address:")
-    print(public_key)
+    print("\n🔑 Your BunkNet Public Address:"); print(public_key)
     
 def handle_balance(args):
     password = getpass.getpass("Enter password to unlock wallet: ")
@@ -145,13 +145,11 @@ def handle_history(args):
     info = get_address_info(public_key)
     transactions = info.get('transactions', [])
     print("\n📜 Transaction History:")
-    if not transactions:
-        print("No transactions found.")
-        return
+    if not transactions: print("No transactions found."); return
     for tx in reversed(transactions):
         direction = "OUT" if tx['sender'] == public_key else "IN "
-        color_code = "\033[91m" if direction == "OUT" else "\033[92m"
-        print(f"{color_code}{direction}\033[0m | To/From: {tx['recipient' if direction == 'OUT' else tx['sender']][:15]}... | Amount: {tx['amount']:.2f} | Fee: {tx.get('fee', 0):.4f}")
+        color = "\033[91m" if direction == "OUT" else "\033[92m"
+        print(f"{color}{direction}\033[0m | To/From: {tx['recipient' if direction == 'OUT' else tx['sender']][:15]}... | Amount: {tx['amount']:.2f} | Fee: {tx.get('fee', 0):.4f}")
 
 def handle_send(args):
     password = getpass.getpass("Enter password to unlock wallet: ")
@@ -159,10 +157,28 @@ def handle_send(args):
     print(f"Sending {args.amount} $BUNK to {args.to} with a fee of {args.fee} $BUNK...")
     send_transaction(key_pair, args.to, args.amount, args.fee)
 
-# ... (main execution & argument parsing remain exactly the same) ...
+# ## NEW ## - Command handler to show the seed phrase
+def handle_backup(args):
+    """Handles showing the user their seed phrase."""
+    password = getpass.getpass("Enter password to unlock wallet: ")
+    print("\n" + "="*50)
+    print("🛑 WARNING: SENSITIVE INFORMATION AHEAD 🛑")
+    print("Anyone who sees this phrase can steal your funds.")
+    print("Ensure you are in a private and secure location.")
+    print("="*50 + "\n")
+    
+    mnemonic = load_mnemonic(password)
+    print("🔑 Your private seed phrase is:")
+    print(f"\n{mnemonic}\n")
+
+# =============================================================================
+# MAIN EXECUTION & ARGUMENT PARSING
+# =============================================================================
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="BunkNet CLI Wallet - Manage your BunkNet assets.")
     subparsers = parser.add_subparsers(dest='command', required=True, help='Available commands')
+
+    # ... (generate, import, address, balance, history, send parsers remain the same) ...
     parser_generate = subparsers.add_parser('generate', help='Generate a new wallet and save it.')
     parser_generate.set_defaults(func=handle_generate)
     parser_import = subparsers.add_parser('import', help='Import a wallet from a seed phrase.')
@@ -178,6 +194,11 @@ if __name__ == '__main__':
     parser_send.add_argument('--amount', required=True, type=float, help='Amount of $BUNK to send.')
     parser_send.add_argument('--fee', default=0.01, type=float, help='Transaction fee (default: 0.01).')
     parser_send.set_defaults(func=handle_send)
+
+    # ## NEW ## - Parser for the backup command
+    parser_backup = subparsers.add_parser('backup', help='Show your secret seed phrase (for backup).')
+    parser_backup.set_defaults(func=handle_backup)
+    
     args = parser.parse_args()
     args.func(args)
     
