@@ -46,7 +46,6 @@ RECIPIENT, AMOUNT, FEE, CONFIRMATION = range(4)
 
 # --- Helper Functions ---
 def escape_markdown(text: str) -> str:
-    """Escapes special characters for Telegram's MarkdownV2."""
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
@@ -62,6 +61,7 @@ def encrypt_mnemonic(mnemonic: str, user_id: int) -> str:
     cipher = AES.new(key, AES.MODE_CBC)
     encrypted = cipher.encrypt(pad(mnemonic.encode(), AES.block_size))
     return binascii.hexlify(salt + cipher.iv + encrypted).decode()
+
 def decrypt_mnemonic(encrypted_hex: str, user_id: int) -> str:
     encrypted_bytes = binascii.unhexlify(encrypted_hex)
     salt, iv, ciphertext = encrypted_bytes[:16], encrypted_bytes[16:32], encrypted_bytes[32:]
@@ -69,11 +69,13 @@ def decrypt_mnemonic(encrypted_hex: str, user_id: int) -> str:
     key = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000, 32)
     cipher = AES.new(key, AES.MODE_CBC, iv=iv)
     return unpad(cipher.decrypt(ciphertext), AES.block_size).decode()
+
 def get_keys_from_mnemonic(mnemonic: str) -> tuple[SigningKey, str]:
     seed = Mnemonic.to_seed(mnemonic)
     private_key = SigningKey.from_string(seed[:32], curve=SECP256k1)
     public_key = binascii.hexlify(private_key.get_verifying_key().to_string()).decode()
     return private_key, public_key
+
 def get_or_create_wallet(user_id: int, username: str) -> dict:
     user = users_col.find_one({"telegram_id": user_id})
     if user: return user
@@ -89,6 +91,7 @@ def get_or_create_wallet(user_id: int, username: str) -> dict:
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("💰 Balance", callback_data="balance"), InlineKeyboardButton("📜 History", callback_data="history")], [InlineKeyboardButton("⬆️ Send", callback_data="send"), InlineKeyboardButton("⬇️ Receive", callback_data="receive")], [InlineKeyboardButton("⚙️ Settings", callback_data="settings")]]
     return InlineKeyboardMarkup(keyboard)
+
 def get_settings_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("🔑 Set/Change PIN", callback_data="set_pin")], [InlineKeyboardButton("📄 View Seed Phrase", callback_data="backup")], [InlineKeyboardButton("« Back to Main Menu", callback_data="main_menu")]]
     return InlineKeyboardMarkup(keyboard)
@@ -98,6 +101,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     get_or_create_wallet(user.id, user.username)
     await update.message.reply_text(f"👋 Welcome to the BunkNet Wallet, {user.first_name}!\n\nUse the buttons below or type /help for a list of commands.", reply_markup=get_main_menu_keyboard())
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = r"""
 *BunkNet Wallet Bot Help*
@@ -112,8 +116,10 @@ Here are the available commands:
 You can also use the interactive buttons to navigate\.
 """
     await update.message.reply_text(help_text, parse_mode='MarkdownV2')
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Action cancelled.", reply_markup=get_main_menu_keyboard())
+    context.user_data.clear()
     return ConversationHandler.END
 
 # --- Simple Button Actions ---
@@ -128,13 +134,17 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message = f"Your current balance is:\n\n`{balance_str}` *$BUNK*"
     except requests.exceptions.RequestException: message = "Could not connect to the BunkNet network."
     await query.edit_message_text(text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query; await query.answer()
-    await query.message.delete()
+    # This can be called by a command or a query
+    chat_id = update.effective_chat.id
+    if update.callback_query: await update.callback_query.answer(); await update.callback_query.message.delete()
+    
     user_wallet = get_or_create_wallet(update.effective_user.id, update.effective_user.username)
     qr_img = qrcode.make(user_wallet['public_key']); bio = io.BytesIO(); qr_img.save(bio, 'PNG'); bio.seek(0)
     caption = f"Here is your BunkNet address:\n\n`{user_wallet['public_key']}`"
-    await context.bot.send_photo(chat_id=update.effective_user.id, photo=bio, caption=caption, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+    await context.bot.send_photo(chat_id=chat_id, photo=bio, caption=caption, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query; await query.answer()
     user_wallet = get_or_create_wallet(update.effective_user.id, update.effective_user.username)
@@ -153,9 +163,11 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message = "\n".join(message_parts)
     except requests.exceptions.RequestException: message = "Could not fetch transaction history."
     await query.edit_message_text(text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⚙️ Settings", reply_markup=get_settings_menu_keyboard())
+
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query; await query.answer()
     await query.edit_message_text("Main Menu:", reply_markup=get_main_menu_keyboard())
@@ -244,6 +256,7 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.edit_message_text(text=result_message, reply_markup=get_main_menu_keyboard())
     else:
         await query.edit_message_text(text="Transaction cancelled.", reply_markup=get_main_menu_keyboard())
+    context.user_data.clear()
     return ConversationHandler.END
 
 def main() -> None:
@@ -251,12 +264,18 @@ def main() -> None:
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
 
+    # Conversation handler for setting a PIN
     set_pin_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_pin_start, pattern='^set_pin$')],
-        states={ SET_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_new_pin)], CONFIRM_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_pin_confirmation)]},
+        states={
+            SET_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_new_pin)],
+            CONFIRM_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_pin_confirmation)]
+        },
         fallbacks=[CommandHandler('cancel', cancel)],
     )
-    send_and_backup_handler = ConversationHandler(
+    
+    # Conversation handler for PIN-protected actions (Send and Backup)
+    protected_action_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(protected_action_start, pattern='^(send|backup)$')],
         states={
             VERIFY_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_pin_and_proceed)],
@@ -268,19 +287,24 @@ def main() -> None:
         fallbacks=[CommandHandler('cancel', cancel)],
     )
 
+    # Register handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("address", receive))
-    application.add_handler(CallbackQueryHandler(back_to_main_menu, pattern='^main_menu$'))
-    application.add_handler(CallbackQueryHandler(settings, pattern='^settings$'))
+    
+    # Simple button clicks
     application.add_handler(CallbackQueryHandler(balance, pattern='^balance$'))
     application.add_handler(CallbackQueryHandler(history, pattern='^history$'))
     application.add_handler(CallbackQueryHandler(receive, pattern='^receive$'))
-    application.add_handler(set_pin_handler)
-    application.add_handler(send_and_backup_handler)
+    application.add_handler(CallbackQueryHandler(settings, pattern='^settings$'))
+    application.add_handler(CallbackQueryHandler(back_to_main_menu, pattern='^main_menu$'))
 
+    # Conversation handlers
+    application.add_handler(set_pin_handler)
+    application.add_handler(protected_action_handler)
+    
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
-                  
+    
