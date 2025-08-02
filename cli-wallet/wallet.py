@@ -52,8 +52,10 @@ def save_wallet(mnemonic: str, password: str):
     with open(WALLET_FILE, 'wb') as f: f.write(encrypted_mnemonic)
     print(f"✅ Wallet saved securely to {WALLET_FILE}")
 
-def load_wallet(password: str) -> SigningKey:
-    """Loads and decrypts the wallet, returning the key pair."""
+# ## NEW ## - Helper function to reduce repeated code
+def get_unlocked_wallet() -> SigningKey:
+    """Prompts for password and returns the unlocked key pair."""
+    password = getpass.getpass("Enter password to unlock wallet: ")
     if not os.path.exists(WALLET_FILE):
         print(f"❌ Error: Wallet file '{WALLET_FILE}' not found. Generate or import a wallet first.")
         sys.exit(1)
@@ -65,7 +67,6 @@ def load_wallet(password: str) -> SigningKey:
         print("❌ Error: Incorrect password or corrupted wallet file.")
         sys.exit(1)
 
-# ## NEW ## - Function to load just the mnemonic string
 def load_mnemonic(password: str) -> str:
     """Loads and decrypts the wallet, returning the mnemonic phrase."""
     if not os.path.exists(WALLET_FILE):
@@ -78,7 +79,9 @@ def load_mnemonic(password: str) -> str:
         print("❌ Error: Incorrect password or corrupted wallet file.")
         sys.exit(1)
 
-# ... (API interaction functions remain the same) ...
+# =============================================================================
+# API INTERACTION
+# =============================================================================
 def get_address_info(address: str):
     try:
         response = requests.get(f"{BFF_API_URL}/address/{address}")
@@ -126,50 +129,73 @@ def handle_import(args):
     save_wallet(mnemonic, password)
     
 def handle_address(args):
-    password = getpass.getpass("Enter password to unlock wallet: ")
-    key_pair = load_wallet(password)
+    key_pair = get_unlocked_wallet() # ## MODIFIED ##
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
     print("\n🔑 Your BunkNet Public Address:"); print(public_key)
     
 def handle_balance(args):
-    password = getpass.getpass("Enter password to unlock wallet: ")
-    key_pair = load_wallet(password)
+    key_pair = get_unlocked_wallet() # ## MODIFIED ##
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
     info = get_address_info(public_key)
     print(f"\n💰 Balance: {info.get('balance', 0):.4f} $BUNK")
 
+# ## MODIFIED ## - This version is fixed to handle reward transactions correctly.
 def handle_history(args):
-    password = getpass.getpass("Enter password to unlock wallet: ")
-    key_pair = load_wallet(password)
+    key_pair = get_unlocked_wallet()
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
     info = get_address_info(public_key)
     transactions = info.get('transactions', [])
+    
     print("\n📜 Transaction History:")
-    if not transactions: print("No transactions found."); return
+    if not transactions:
+        print("No transactions found.")
+        return
+        
     for tx in reversed(transactions):
-        direction = "OUT" if tx['sender'] == public_key else "IN "
-        color = "\033[91m" if direction == "OUT" else "\033[92m"
-        print(f"{color}{direction}\033[0m | To/From: {tx['recipient' if direction == 'OUT' else tx['sender']][:15]}... | Amount: {tx['amount']:.2f} | Fee: {tx.get('fee', 0):.4f}")
+        if tx['sender'] == '0' and tx['recipient'] == public_key:
+            # Handle mining reward transaction
+            color_code = "\033[92m" # Green
+            print(f"{color_code}IN \033[0m | From: Network Reward      | Amount: {tx['amount']:.2f}")
+        else:
+            # Handle normal P2P transaction
+            direction = "OUT" if tx['sender'] == public_key else "IN "
+            color_code = "\033[91m" if direction == "OUT" else "\033[92m"
+            other_party = tx['recipient'] if direction == "OUT" else tx['sender']
+            print(f"{color_code}{direction}\033[0m | To/From: {other_party[:15]:<15} | Amount: {tx['amount']:.2f} | Fee: {tx.get('fee', 0):.4f}")
 
+# ## MODIFIED ## - This version adds a confirmation prompt for safety.
 def handle_send(args):
-    password = getpass.getpass("Enter password to unlock wallet: ")
-    key_pair = load_wallet(password)
-    print(f"Sending {args.amount} $BUNK to {args.to} with a fee of {args.fee} $BUNK...")
+    key_pair = get_unlocked_wallet()
+    public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
+    balance = get_address_info(public_key).get('balance', 0)
+    
+    if (args.amount + args.fee) > balance:
+        print(f"❌ Error: Insufficient funds. Your balance is {balance:.4f} $BUNK.")
+        sys.exit(1)
+
+    print("\n--- Transaction Summary ---")
+    print(f"  Recipient: {args.to}")
+    print(f"  Amount:    {args.amount:.4f} $BUNK")
+    print(f"  Fee:       {args.fee:.4f} $BUNK")
+    print("-" * 27)
+    print(f"  Total:     {(args.amount + args.fee):.4f} $BUNK")
+    print("-" * 27)
+    
+    confirm = input("Type 'yes' to confirm and send this transaction: ")
+    if confirm.lower() != 'yes':
+        print("Transaction cancelled.")
+        sys.exit(0)
+    
+    print("\nSending transaction...")
     send_transaction(key_pair, args.to, args.amount, args.fee)
 
-# ## NEW ## - Command handler to show the seed phrase
 def handle_backup(args):
-    """Handles showing the user their seed phrase."""
     password = getpass.getpass("Enter password to unlock wallet: ")
-    print("\n" + "="*50)
-    print("🛑 WARNING: SENSITIVE INFORMATION AHEAD 🛑")
-    print("Anyone who sees this phrase can steal your funds.")
-    print("Ensure you are in a private and secure location.")
-    print("="*50 + "\n")
-    
+    print("\n" + "="*50 + "\n🛑 WARNING: SENSITIVE INFORMATION AHEAD 🛑");
+    print("Anyone who sees this phrase can steal your funds.");
+    print("Ensure you are in a private and secure location.\n" + "="*50 + "\n")
     mnemonic = load_mnemonic(password)
-    print("🔑 Your private seed phrase is:")
-    print(f"\n{mnemonic}\n")
+    print("🔑 Your private seed phrase is:\n"); print(f"{mnemonic}\n")
 
 # =============================================================================
 # MAIN EXECUTION & ARGUMENT PARSING
@@ -178,7 +204,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="BunkNet CLI Wallet - Manage your BunkNet assets.")
     subparsers = parser.add_subparsers(dest='command', required=True, help='Available commands')
 
-    # ... (generate, import, address, balance, history, send parsers remain the same) ...
     parser_generate = subparsers.add_parser('generate', help='Generate a new wallet and save it.')
     parser_generate.set_defaults(func=handle_generate)
     parser_import = subparsers.add_parser('import', help='Import a wallet from a seed phrase.')
@@ -194,8 +219,6 @@ if __name__ == '__main__':
     parser_send.add_argument('--amount', required=True, type=float, help='Amount of $BUNK to send.')
     parser_send.add_argument('--fee', default=0.01, type=float, help='Transaction fee (default: 0.01).')
     parser_send.set_defaults(func=handle_send)
-
-    # ## NEW ## - Parser for the backup command
     parser_backup = subparsers.add_parser('backup', help='Show your secret seed phrase (for backup).')
     parser_backup.set_defaults(func=handle_backup)
     
