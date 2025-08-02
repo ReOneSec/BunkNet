@@ -40,9 +40,13 @@ users_col = db["users"]
 
 mnemo = Mnemonic("english")
 
-# --- State Constants for Conversations ---
-SET_PIN, CONFIRM_PIN, VERIFY_PIN = range(3)
-RECIPIENT, AMOUNT, FEE, CONFIRMATION = range(4)
+# --- State Constants for the Main Conversation ---
+MAIN_MENU, SETTINGS_MENU = range(2)
+# Nested Conversation States
+SET_PIN_FLOW, SEND_FLOW, BACKUP_FLOW = range(2, 5)
+# Sub-states
+NEW_PIN, CONFIRM_NEW_PIN = range(5, 7)
+VERIFY_PIN, GET_RECIPIENT, GET_AMOUNT, GET_FEE, CONFIRM_SEND = range(7, 12)
 
 # --- Helper Functions ---
 def escape_markdown(text: str) -> str:
@@ -54,6 +58,7 @@ def hash_pin(pin: str, user_id: int) -> str:
     return hashlib.pbkdf2_hmac('sha256', pin.encode(), salt, 100000, 64).hex()
 
 # --- Wallet & Crypto Helpers ---
+# ... (These are correct and remain unchanged) ...
 def encrypt_mnemonic(mnemonic: str, user_id: int) -> str:
     salt = get_random_bytes(16); password = f"{BOT_SECRET_KEY}{user_id}"
     key = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000, 32)
@@ -91,31 +96,25 @@ def get_settings_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("🔑 Set/Change PIN", callback_data="set_pin")], [InlineKeyboardButton("📄 View Seed Phrase", callback_data="backup")], [InlineKeyboardButton("« Back to Main Menu", callback_data="main_menu")]]
     return InlineKeyboardMarkup(keyboard)
 
-# --- Top Level Command Handlers ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# --- Core Action Handlers ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     get_or_create_wallet(user.id, user.username)
-    await update.message.reply_text(f"👋 Welcome to the BunkNet Wallet, {user.first_name}!\n\nUse the buttons below or type /help for a list of commands.", reply_markup=get_main_menu_keyboard())
+    await update.message.reply_text(f"👋 Welcome to the BunkNet Wallet, {user.first_name}!\n\nUse the buttons below or type /help.", reply_markup=get_main_menu_keyboard())
+    return MAIN_MENU
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = r"""
-*BunkNet Wallet Bot Help*
-Here are the available commands:
-`/start` \- Initializes the bot and shows the main menu\.
-`/address` \- Shows your wallet address and QR code\.
-`/help` \- Shows this help message\.
-`/cancel` \- Cancels any ongoing operation \(like sending or setting a PIN\)\.
-You can also use the interactive buttons to navigate\.
+    help_text = r"""*BunkNet Wallet Bot Help*
+Here are the commands:
+`/start` \- Shows the main menu\.
+`/address` \- Shows your wallet address\.
+`/help` \- Shows this message\.
+`/cancel` \- Cancels any operation\.
 """
     await update.message.reply_text(help_text, parse_mode='MarkdownV2')
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Action cancelled.", reply_markup=get_main_menu_keyboard())
-    context.user_data.clear()
-    return ConversationHandler.END
 
-# --- Simple Button Actions ---
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
-    user_wallet = get_or_create_wallet(update.effective_user.id, update.effective_user.username)
+    user_wallet = get_or_create_wallet(update.effective_user.id, "")
     try:
         response = requests.get(f"{BFF_API_URL}/address/{user_wallet['public_key']}")
         response.raise_for_status()
@@ -124,16 +123,20 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message = f"Your current balance is:\n\n`{balance_str}` *$BUNK*"
     except requests.exceptions.RequestException: message = "Could not connect to the BunkNet network."
     await query.edit_message_text(text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
-async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    return MAIN_MENU
+
+async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     chat_id = update.effective_chat.id
     if update.callback_query: await update.callback_query.answer(); await update.callback_query.message.delete()
-    user_wallet = get_or_create_wallet(update.effective_user.id, update.effective_user.username)
+    user_wallet = get_or_create_wallet(update.effective_user.id, "")
     qr_img = qrcode.make(user_wallet['public_key']); bio = io.BytesIO(); qr_img.save(bio, 'PNG'); bio.seek(0)
     caption = f"Here is your BunkNet address:\n\n`{user_wallet['public_key']}`"
     await context.bot.send_photo(chat_id=chat_id, photo=bio, caption=caption, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
-async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    return MAIN_MENU
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
-    user_wallet = get_or_create_wallet(update.effective_user.id, update.effective_user.username)
+    user_wallet = get_or_create_wallet(update.effective_user.id, "")
     try:
         response = requests.get(f"{BFF_API_URL}/address/{user_wallet['public_key']}")
         response.raise_for_status()
@@ -149,73 +152,76 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message = "\n".join(message_parts)
     except requests.exceptions.RequestException: message = "Could not fetch transaction history."
     await query.edit_message_text(text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
-async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    return MAIN_MENU
+
+async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⚙️ Settings", reply_markup=get_settings_menu_keyboard())
-async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    return SETTINGS_MENU
+
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     await query.edit_message_text("Main Menu:", reply_markup=get_main_menu_keyboard())
+    return MAIN_MENU
 
-# --- Set PIN Conversation ---
-async def set_pin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer(); await query.edit_message_text("Please enter a new 4-digit PIN.")
-    return SET_PIN
-async def get_new_pin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pin = update.message.text
-    await update.message.delete()
-    if not (pin.isdigit() and len(pin) == 4):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Invalid PIN. Please enter exactly 4 digits. Or /cancel.")
-        return SET_PIN
-    context.user_data['new_pin'] = pin
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Please enter your new PIN again to confirm.")
-    return CONFIRM_PIN
-async def get_pin_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pin = update.message.text
-    await update.message.delete()
-    if pin != context.user_data.get('new_pin'):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="PINs do not match. Please start over.", reply_markup=get_settings_menu_keyboard())
-        return ConversationHandler.END
-    pin_hash = hash_pin(pin, update.effective_user.id)
-    users_col.update_one({"telegram_id": update.effective_user.id}, {"$set": {"pin_hash": pin_hash}})
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ PIN successfully set!", reply_markup=get_main_menu_keyboard())
-    return ConversationHandler.END
-
-# --- Send & Backup Conversations (PIN Protected) ---
+# --- PIN, SEND, BACKUP FLOWS ---
 async def protected_action_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     user_wallet = get_or_create_wallet(query.from_user.id, "")
     if not user_wallet.get('pin_hash'):
         await query.edit_message_text("Please set a PIN in Settings first.", reply_markup=get_settings_menu_keyboard())
-        return ConversationHandler.END
+        return SETTINGS_MENU
     context.user_data['next_action'] = query.data
     await query.edit_message_text(f"Please enter your PIN to authorize this action.")
     return VERIFY_PIN
-async def check_pin_and_proceed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pin = update.message.text
-    await update.message.delete()
+
+async def check_pin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    pin = update.message.text; await update.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
     if hash_pin(pin, update.effective_user.id) != user_wallet.get('pin_hash'):
         await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Incorrect PIN. Action cancelled.", reply_markup=get_main_menu_keyboard())
-        return ConversationHandler.END
+        return MAIN_MENU
+    
     next_action = context.user_data.get('next_action')
     if next_action == 'backup':
-        await perform_backup(update, context); return ConversationHandler.END
+        await perform_backup(update, context); return MAIN_MENU
     elif next_action == 'send':
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="PIN verified. Who is the recipient?"); return RECIPIENT
-    return ConversationHandler.END
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="PIN verified. Who is the recipient?"); return GET_RECIPIENT
+    return MAIN_MENU
+
+async def get_new_pin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    pin = update.message.text; await update.message.delete()
+    if not (pin.isdigit() and len(pin) == 4):
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Invalid PIN. Please enter exactly 4 digits. Or /cancel.")
+        return NEW_PIN
+    context.user_data['new_pin'] = pin
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Please enter your new PIN again to confirm.")
+    return CONFIRM_NEW_PIN
+
+async def get_pin_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    pin = update.message.text; await update.message.delete()
+    if pin != context.user_data.get('new_pin'):
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="PINs do not match. Please start over by clicking Set PIN again.", reply_markup=get_settings_menu_keyboard())
+        return SETTINGS_MENU
+    pin_hash = hash_pin(pin, update.effective_user.id)
+    users_col.update_one({"telegram_id": update.effective_user.id}, {"$set": {"pin_hash": pin_hash}})
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ PIN successfully set!", reply_markup=get_main_menu_keyboard())
+    return MAIN_MENU
+
 async def perform_backup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     mnemonic = decrypt_mnemonic(get_or_create_wallet(update.effective_user.id, "")['encrypted_mnemonic'], update.effective_user.id)
-    warning_text = escape_markdown("🛑 *WARNING: SENSITIVE INFORMATION* 🛑\nAnyone with this phrase can steal your funds. Delete this message after you've saved it.")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=warning_text, parse_mode='MarkdownV2')
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"`{mnemonic}`", parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+    warning = escape_markdown("🛑 *WARNING* 🛑\nAnyone with this phrase can steal your funds. Delete this message after saving.")
+    await context.bot.send_message(chat_id=update.effective_user.id, text=warning, parse_mode='MarkdownV2')
+    await context.bot.send_message(chat_id=update.effective_user.id, text=f"`{mnemonic}`", parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+
 async def get_recipient(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['recipient'] = update.message.text; await update.message.reply_text("How much $BUNK?")
-    return AMOUNT
+    return GET_AMOUNT
 async def get_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try: context.user_data['amount'] = float(update.message.text); await update.message.reply_text("Transaction fee? (e.g., 0.01)")
     except ValueError: await update.message.reply_text("Invalid amount. Cancelling."); return ConversationHandler.END
-    return FEE
-async def get_fee_and_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    return GET_FEE
+async def get_fee(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['fee'] = float(update.message.text)
         recipient, amount, fee = context.user_data['recipient'], context.user_data['amount'], context.user_data['fee']
@@ -223,7 +229,7 @@ async def get_fee_and_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         text = f"*To:* `{recipient}`\n*Amount:* `{amount_s} $BUNK`\n*Fee:* `{fee_s} $BUNK`\n\n*Total Debit:* `{total_s} $BUNK`"
         keyboard = [[InlineKeyboardButton("✅ Confirm & Send", callback_data="confirm_send"), InlineKeyboardButton("❌ Cancel", callback_data="cancel_send")]]
         await update.message.reply_text(text=f"Please confirm:\n\n{text}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='MarkdownV2')
-        return CONFIRMATION
+        return CONFIRM_SEND
     except ValueError: await update.message.reply_text("Invalid fee. Cancelling."); return ConversationHandler.END
 async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
@@ -232,65 +238,66 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
         user_wallet = get_or_create_wallet(update.effective_user.id, "")
         mnemonic = decrypt_mnemonic(user_wallet['encrypted_mnemonic'], update.effective_user.id)
         private_key, public_key = get_keys_from_mnemonic(mnemonic)
-        tx_data = {'sender': public_key, 'recipient': context.user_data['recipient'], 'amount': context.user_data['amount'], 'fee': context.user_data['fee']}
+        tx_data = {'sender': public_key, **context.user_data}
         tx_hash = hashlib.sha256(json.dumps({k: tx_data[k] for k in ['sender', 'recipient', 'amount', 'fee']}, sort_keys=True).encode()).digest()
         signature = binascii.hexlify(private_key.sign(tx_hash)).decode()
         payload = {**tx_data, 'public_key': public_key, 'signature': signature}
         try:
             response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload); response.raise_for_status()
-            result_message = "✅ Transaction sent successfully! It will be processed in the next block."
+            result_message = "✅ Transaction sent successfully!"
         except requests.exceptions.RequestException as e: result_message = f"❌ Error: {e.response.json().get('error', 'Could not send transaction.')}"
         await query.edit_message_text(text=result_message, reply_markup=get_main_menu_keyboard())
-    else:
-        await query.edit_message_text(text="Transaction cancelled.", reply_markup=get_main_menu_keyboard())
+    else: await query.edit_message_text(text="Transaction cancelled.", reply_markup=get_main_menu_keyboard())
     context.user_data.clear()
-    return ConversationHandler.END
+    return MAIN_MENU
 
 def main() -> None:
     if not TELEGRAM_BOT_TOKEN or not BOT_SECRET_KEY: logging.error("Bot tokens must be set in .env file."); return
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
 
-    # Conversation handler for setting a PIN
-    set_pin_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(set_pin_start, pattern='^set_pin$')],
+    # A master ConversationHandler to manage all states and nested conversations
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
         states={
-            SET_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_new_pin)],
-            CONFIRM_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_pin_confirmation)]
+            MAIN_MENU: [
+                CallbackQueryHandler(balance, pattern='^balance$'),
+                CallbackQueryHandler(history, pattern='^history$'),
+                CallbackQueryHandler(receive, pattern='^receive$'),
+                CallbackQueryHandler(settings, pattern='^settings$'),
+                # Nested conversations are entry points from the main menu
+                ConversationHandler(
+                    entry_points=[CallbackQueryHandler(protected_action_start, pattern='^(send|backup)$')],
+                    states={
+                        VERIFY_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_pin_and_proceed)],
+                        GET_RECIPIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_recipient)],
+                        GET_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_amount)],
+                        GET_FEE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_fee)],
+                        CONFIRM_SEND: [CallbackQueryHandler(process_transaction)]
+                    },
+                    fallbacks=[CommandHandler('cancel', cancel)],
+                    map_to_parent={MAIN_MENU: MAIN_MENU, ConversationHandler.END: MAIN_MENU}
+                )
+            ],
+            SETTINGS_MENU: [
+                CallbackQueryHandler(back_to_main_menu, pattern='^main_menu$'),
+                ConversationHandler(
+                    entry_points=[CallbackQueryHandler(set_pin_start, pattern='^set_pin$')],
+                    states={
+                        NEW_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_new_pin)],
+                        CONFIRM_NEW_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_pin_confirmation)]
+                    },
+                    fallbacks=[CommandHandler('cancel', cancel)],
+                    map_to_parent={MAIN_MENU: MAIN_MENU, SETTINGS_MENU: SETTINGS_MENU, ConversationHandler.END: SETTINGS_MENU}
+                )
+            ]
         },
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
-    # Conversation handler for PIN-protected actions (Send and Backup)
-    protected_action_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(protected_action_start, pattern='^(send|backup)$')],
-        states={
-            VERIFY_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_pin_and_proceed)],
-            RECIPIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_recipient)],
-            AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_amount)],
-            FEE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_fee_and_confirm)],
-            CONFIRMATION: [CallbackQueryHandler(process_transaction)]
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
+        fallbacks=[CommandHandler('start', start), CommandHandler('help', help_command), CommandHandler('address', receive), CommandHandler('cancel', cancel)],
     )
 
-    # Register handlers - order matters
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("address", receive))
-    
-    # Conversation handlers should be registered before general button handlers
-    application.add_handler(set_pin_handler)
-    application.add_handler(protected_action_handler)
-
-    # General button clicks for simple, one-shot actions
-    application.add_handler(CallbackQueryHandler(balance, pattern='^balance$'))
-    application.add_handler(CallbackQueryHandler(history, pattern='^history$'))
-    application.add_handler(CallbackQueryHandler(receive, pattern='^receive$'))
-    application.add_handler(CallbackQueryHandler(settings_menu, pattern='^settings$'))
-    application.add_handler(CallbackQueryHandler(back_to_main_menu, pattern='^main_menu$'))
-    
+    application.add_handler(conv_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
-    
+        
