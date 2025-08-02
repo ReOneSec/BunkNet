@@ -279,7 +279,7 @@ def main() -> None:
         logging.error("TELEGRAM_BOT_TOKEN and BOT_SECRET_KEY must be set in .env file.")
         return
         
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
 
     send_conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(send_start, pattern='^send$')],
