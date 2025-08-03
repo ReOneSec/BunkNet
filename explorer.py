@@ -90,27 +90,36 @@ def search(query):
     """Intelligently searches for a block or an address."""
     if not query or not query.strip():
         return jsonify({'error': 'Search query cannot be empty'}), 400
-    
-    # Try as a block first (more efficient)
+
+    # Try as a block first
     try:
         block_res = requests.get(f"{BUNKNET_NODE_URL}/get_block/{query}")
         if block_res.ok:
             return jsonify({'type': 'block', 'data': block_res.json()})
     except requests.exceptions.RequestException:
         return jsonify({'error': 'Could not connect to core node'}), 503
-        
+
     # If not a block, try as an address
     try:
-        addr_res = requests.get(f"{BUNKNET_NODE_URL}/get_balance", params={'address': query})
-        if addr_res.ok:
-            # If it's a valid address, get the full enriched info
-            full_addr_info_response, status_code = get_address_info(query)
-            if status_code == 200:
+        # First, just check if the balance endpoint returns OK for this query.
+        # This is a lightweight way to see if it's a valid address format.
+        addr_check_res = requests.get(f"{BUNKNET_NODE_URL}/get_balance", params={'address': query})
+        if addr_check_res.ok:
+            # ## MODIFIED LOGIC STARTS HERE ##
+            # Call get_address_info which returns a single Response object
+            full_addr_info_response = get_address_info(query)
+
+            # Check the status code of the Response object
+            if full_addr_info_response.status_code == 200:
+                # If successful, get the JSON from the response and return it
                 return jsonify({'type': 'address', 'data': full_addr_info_response.get_json()})
+            # ## MODIFIED LOGIC ENDS HERE ##
+
     except requests.exceptions.RequestException:
         return jsonify({'error': 'Could not connect to core node'}), 503
-    
+
     return jsonify({'error': 'No block or address found for the given query'}), 404
+
 
 @app.route('/api/labels', methods=['GET'])
 def get_labels():
