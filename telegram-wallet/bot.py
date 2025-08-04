@@ -155,26 +155,42 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             message = "You have no transactions yet."
         else:
             message_parts = ["*📜 Your 5 most recent transactions:*\n"]
-            # We process the list in reverse to show the latest first
             for tx in reversed(transactions[-5:]):
                 direction_icon = "➡" if tx['sender'] == public_key else "⬅"
                 direction_text = "Sent" if tx['sender'] == public_key else "Received"
-                
                 amount_str = escape_markdown(f"{tx['amount']:.4f}")
-                tx_id = tx['transaction_id']
                 
-                # --- THIS IS THE FIX ---
-                # We now escape the link text to handle the '...'
+                # --- NEW LOGIC TO GET SENDER/RECIPIENT ---
+                other_party_label = ""
+                display_address = ""
+                
+                if direction_text == "Sent":
+                    other_party_label = "To"
+                    # Truncate recipient address
+                    addr = tx['recipient']
+                    display_address = escape_markdown(f"{addr[:6]}...{addr[-6:]}")
+                else: # Received
+                    other_party_label = "From"
+                    if tx['sender'] == '0':
+                        # Handle special case for network rewards
+                        display_address = escape_markdown("Network Reward")
+                    else:
+                        # Truncate sender address
+                        addr = tx['sender']
+                        display_address = escape_markdown(f"{addr[:6]}...{addr[-6:]}")
+                # --- END OF NEW LOGIC ---
+
+                tx_id = tx['transaction_id']
                 link_text = escape_markdown(f"{tx_id[:6]}...{tx_id[-6:]}")
-                # -----------------------
                 
                 explorer_url = "https://explorer.bunknet.online"
                 if 'block_index' in tx:
                     explorer_url += f"/#/block/{tx['block_index']}"
                 
-                # Build the message for this transaction using the escaped link text
+                # Build the updated message format
                 tx_info = (
                     f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n"
+                    f"*{other_party_label}:* `{display_address}`\n"
                     f"*Hash:* [{link_text}]({explorer_url})"
                 )
                 message_parts.append(tx_info)
@@ -193,7 +209,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         disable_web_page_preview=True
     )
     return MAIN_MENU
-                
+    
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     # ## MODIFIED ## - Edit works here because the message is text-based
