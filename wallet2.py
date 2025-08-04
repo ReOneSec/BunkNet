@@ -236,15 +236,17 @@ def handle_backup():
 def display_menu():
     """Clears the screen and displays the main menu."""
     os.system('cls' if os.name == 'nt' else 'clear')
-    art = f"""
+    # Corrected ASCII Art for "BunkNet Wallet"
+    art = rf"""
 {Colors.CYAN}
-    ____              __    __  __   ___    __    _  _
-   (    )            /  \  (  )/  \ / __)  /  \  ( \/ )
-    ) D (   ___     (  O )  )(  O )( (__  (  O ) / \/ \ 
-   (____)  (___)     \__/  (__)\__/ \___)  \__/  \_)(_/ 
-
-{Colors.HEADER}                      Wallet - v1.0{Colors.ENDC}
-======================================================
+  ____              _   _      _   _   _ _____ _____ ____  __        __        _     _
+ | __ ) _   _ _ __ | |_| | ___| \ | | | \ | |_   _|_   _|  _ \ \      / /__  ___| | __| |
+ |  _ \| | | | '_ \| __| |/ _ \  \| | |  \| | | |   | | | |_) \ \ /\ / / _ \/ __| |/ _` |
+ | |_) | |_| | | | | |_| |  __/ |\  | | |\  | | |   | | |  __/ \ V  V /  __/ (__| | (_| |
+ |____/ \__,_|_| |_|\__|_|\___|_| \_| |_| \_| |_|   |_| |_|     \_/\_/ \___|\___|_|\__,_|
+                                                                                    
+{Colors.HEADER}                                                                   Wallet v1.0{Colors.ENDC}
+===========================================================================================
     """
     print(art)
     print(f" {Colors.BLUE}1.{Colors.ENDC} Create or Import a Wallet")
@@ -254,7 +256,7 @@ def display_menu():
     print(f" {Colors.BLUE}5.{Colors.ENDC} Send $BUNK")
     print(f" {Colors.BLUE}6.{Colors.ENDC} View Transaction History")
     print(f"\n {Colors.YELLOW}q.{Colors.ENDC} Quit")
-    print("======================================================")
+    print("===========================================================================================")
 
 def main():
     """The main function to run the interactive tool."""
@@ -286,4 +288,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-      
+        
