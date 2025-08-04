@@ -236,19 +236,24 @@ def handle_backup():
 def display_menu():
     """Clears the screen and displays the main menu."""
     os.system('cls' if os.name == 'nt' else 'clear')
-    # Corrected and verified ASCII Art for "BunkNet"
+    # User-provided ASCII Art
     art = rf"""
-{Colors.CYAN}
-  ____              _   _                _   _
- | __ ) _   _ _ __ | |_| |__   ___ _ __ | \ | |
- |  _ \| | | | '_ \| __| '_ \ / _ \ '_ \|  \| |
- | |_) | |_| | | | | |_| | | |  __/ | | | |\  |
- |____/ \__,_|_| |_|\__|_| |_|\___|_| |_|_| \_|
-
-{Colors.HEADER}                             Wallet v1.0{Colors.ENDC}
-=====================================================
-    """
+{Colors.CYAN}*****************************************
+* ____              _    _   _      _   *
+*| __ ) _   _ _ __ | | _| \ | | ___| |_ *
+*|  _ \| | | | '_ \| |/ /  \| |/ _ \ __|*
+*| |_) | |_| | | | |   <| |\  |  __/ |_ *
+*|____/ \__,_|_| |_|_|\_\_| \_|\___|\__|*
+*__        __    _ _      _             *
+*\ \      / /_ _| | | ___| |_           *
+* \ \ /\ / / _` | | |/ _ \ __|          *
+* \ V  V / (_| | | |  __/ |_           *
+* \_/\_/ \__,_|_|_|\___|\__|          *
+*****************************************{Colors.ENDC}
+"""
     print(art)
+    print(f"{Colors.HEADER}              Wallet v1.0{Colors.ENDC}")
+    print("=========================================")
     print(f" {Colors.BLUE}1.{Colors.ENDC} Create or Import a Wallet")
     print(f" {Colors.BLUE}2.{Colors.ENDC} View Address")
     print(f" {Colors.BLUE}3.{Colors.ENDC} View Balance")
@@ -256,7 +261,7 @@ def display_menu():
     print(f" {Colors.BLUE}5.{Colors.ENDC} Send $BUNK")
     print(f" {Colors.BLUE}6.{Colors.ENDC} View Transaction History")
     print(f"\n {Colors.YELLOW}q.{Colors.ENDC} Quit")
-    print("=====================================================")
+    print("=========================================")
 
 def main():
     """The main function to run the interactive tool."""
@@ -288,4 +293,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
+        
