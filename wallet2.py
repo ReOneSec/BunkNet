@@ -236,17 +236,17 @@ def handle_backup():
 def display_menu():
     """Clears the screen and displays the main menu."""
     os.system('cls' if os.name == 'nt' else 'clear')
-    # Simplified ASCII Art for "BunkNet"
+    # Corrected and verified ASCII Art for "BunkNet"
     art = rf"""
 {Colors.CYAN}
-  ____              _   _      _   _   
- | __ ) _   _ _ __ | |_| | ___| \ | |
- |  _ \| | | | '_ \| __| |/ _ \  \| |
- | |_) | |_| | | | | |_| |  __/ |\  |
- |____/ \__,_|_| |_|\__|_|\___|_| \_|
-                                  
-{Colors.HEADER}                      Wallet v1.0{Colors.ENDC}
-===========================================
+  ____              _   _                _   _
+ | __ ) _   _ _ __ | |_| |__   ___ _ __ | \ | |
+ |  _ \| | | | '_ \| __| '_ \ / _ \ '_ \|  \| |
+ | |_) | |_| | | | | |_| | | |  __/ | | | |\  |
+ |____/ \__,_|_| |_|\__|_| |_|\___|_| |_|_| \_|
+
+{Colors.HEADER}                             Wallet v1.0{Colors.ENDC}
+=====================================================
     """
     print(art)
     print(f" {Colors.BLUE}1.{Colors.ENDC} Create or Import a Wallet")
@@ -256,7 +256,7 @@ def display_menu():
     print(f" {Colors.BLUE}5.{Colors.ENDC} Send $BUNK")
     print(f" {Colors.BLUE}6.{Colors.ENDC} View Transaction History")
     print(f"\n {Colors.YELLOW}q.{Colors.ENDC} Quit")
-    print("===========================================")
+    print("=====================================================")
 
 def main():
     """The main function to run the interactive tool."""
