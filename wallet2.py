@@ -234,35 +234,41 @@ def handle_backup():
 # MAIN APPLICATION LOOP
 # =============================================================================
 def display_menu():
+def display_menu():
     """Clears the screen and displays the main menu."""
     os.system('cls' if os.name == 'nt' else 'clear')
-    # User-provided ASCII Art
+    # User-provided ASCII Art for "BunkNet Wallet"
     art = rf"""
-{Colors.CYAN}*****************************************
-* ____              _    _   _      _   *
-*| __ ) _   _ _ __ | | _| \ | | ___| |_ *
-*|  _ \| | | | '_ \| |/ /  \| |/ _ \ __|*
-*| |_) | |_| | | | |   <| |\  |  __/ |_ *
-*|____/ \__,_|_| |_|_|\_\_| \_|\___|\__|*
-*__        __    _ _      _             *
-*\ \      / /_ _| | | ___| |_           *
-* \ \ /\ / / _` | | |/ _ \ __|          *
-*  \ V  V / (_| | | |  __/ |_           *
-*   \_/\_/ \__,_|_|_|\___|\__|          *
-*****************************************{Colors.ENDC}
+{Colors.CYAN}************************************************************************
+* /$$$$$$$                      /$$       /$$   /$$             /$$    *
+*| $$__  $$                    | $$      | $$$ | $$            | $$    *
+*| $$  \ $$ /$$   /$$ /$$$$$$$ | $$   /$$| $$$$| $$  /$$$$$$  /$$$$$$  *
+*| $$$$$$$ | $$  | $$| $$__  $$| $$  /$$/| $$ $$ $$ /$$__  $$|_  $$_/  *
+*| $$__  $$| $$  | $$| $$  \ $$| $$$$$$/ | $$  $$$$| $$$$$$$$  | $$    *
+*| $$  \ $$| $$  | $$| $$  | $$| $$_  $$ | $$\  $$$| $$_____/  | $$ /$$*
+*| $$$$$$$/|  $$$$$$/| $$  | $$| $$ \  $$| $$ \  $$|  $$$$$$$  |  $$$$/*
+*|_______/  \______/ |__/  |__/|__/  \__/|__/  \__/ \_______/   \___/  *
+* *
+*           /$$      /$$           /$$ /$$             /$$             *
+*           | $$  /$ | $$          | $$| $$            | $$            *
+*           | $$ /$$$| $$  /$$$$$$ | $$| $$  /$$$$$$  /$$$$$$          *
+*           | $$/$$ $$ $$ |____  $$| $$| $$ /$$__  $$|_  $$_/          *
+*           | $$$$_  $$$$  /$$$$$$$| $$| $$| $$$$$$$$  | $$            *
+*           | $$$/ \  $$$ /$$__  $$| $$| $$| $$_____/  | $$ /$$        *
+*           | $$/   \  $$|  $$$$$$$| $$| $$|  $$$$$$$  |  $$$$/        *
+*           |__/     \__/ \_______/|__/|__/ \_______/   \___/          *
+************************************************************************{Colors.ENDC}
 """
     print(art)
-    print(f"{Colors.HEADER}              Wallet v1.0{Colors.ENDC}")
-    print("=========================================")
-    print(f" {Colors.BLUE}1.{Colors.ENDC} Create or Import a Wallet")
-    print(f" {Colors.BLUE}2.{Colors.ENDC} View Address")
-    print(f" {Colors.BLUE}3.{Colors.ENDC} View Balance")
-    print(f" {Colors.BLUE}4.{Colors.ENDC} View Seed Phrase (Backup)")
-    print(f" {Colors.BLUE}5.{Colors.ENDC} Send $BUNK")
-    print(f" {Colors.BLUE}6.{Colors.ENDC} View Transaction History")
-    print(f"\n {Colors.YELLOW}q.{Colors.ENDC} Quit")
-    print("=========================================")
-
+    print(f"    {Colors.BLUE}1.{Colors.ENDC} Create or Import a Wallet")
+    print(f"    {Colors.BLUE}2.{Colors.ENDC} View Address")
+    print(f"    {Colors.BLUE}3.{Colors.ENDC} View Balance")
+    print(f"    {Colors.BLUE}4.{Colors.ENDC} View Seed Phrase (Backup)")
+    print(f"    {Colors.BLUE}5.{Colors.ENDC} Send $BUNK")
+    print(f"    {Colors.BLUE}6.{Colors.ENDC} View Transaction History")
+    print(f"\n    {Colors.YELLOW}q.{Colors.ENDC} Quit")
+    print("=" * 88)
+    
 def main():
     """The main function to run the interactive tool."""
     while True:
