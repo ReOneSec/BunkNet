@@ -39,12 +39,13 @@ class Colors:
 mnemo = Mnemonic("english")
 
 def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
-    """Derives an ECDSA private key from a BIP39 mnemonic."""
+    # This block is correctly indented
     seed = Mnemonic.to_seed(mnemonic)
     private_key_bytes = seed[:32]
     return SigningKey.from_string(private_key_bytes, curve=SECP256k1)
 
 def encrypt_data(data: bytes, password: str) -> bytes:
+    # This block is correctly indented
     salt = get_random_bytes(SALT_SIZE)
     key = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, PBKDF2_ITERATIONS, dklen=AES_KEY_LEN)
     cipher = AES.new(key, AES.MODE_CBC)
@@ -52,6 +53,7 @@ def encrypt_data(data: bytes, password: str) -> bytes:
     return salt + cipher.iv + ciphertext
 
 def decrypt_data(encrypted_data: bytes, password: str) -> bytes:
+    # This block is correctly indented
     salt = encrypted_data[:SALT_SIZE]
     iv = encrypted_data[SALT_SIZE:SALT_SIZE+AES.block_size]
     ciphertext = encrypted_data[SALT_SIZE+AES.block_size:]
@@ -60,12 +62,13 @@ def decrypt_data(encrypted_data: bytes, password: str) -> bytes:
     return unpad(cipher.decrypt(ciphertext), AES.block_size)
 
 def save_wallet(mnemonic: str, password: str):
+    # This block is correctly indented
     encrypted_mnemonic = encrypt_data(mnemonic.encode(), password)
     with open(WALLET_FILE, 'wb') as f: f.write(encrypted_mnemonic)
     print(f"{Colors.GREEN}✅ Wallet saved securely to {WALLET_FILE}{Colors.ENDC}")
 
 def get_unlocked_wallet() -> SigningKey:
-    """Prompts for password and returns the unlocked key pair."""
+    # This block is correctly indented
     if not os.path.exists(WALLET_FILE):
         print(f"{Colors.RED}❌ Error: Wallet file '{WALLET_FILE}' not found. Please create or import a wallet first.{Colors.ENDC}")
         return None
@@ -79,7 +82,7 @@ def get_unlocked_wallet() -> SigningKey:
         return None
 
 def load_mnemonic(password: str) -> str:
-    """Loads and decrypts the wallet, returning the mnemonic phrase."""
+    # This block is correctly indented
     if not os.path.exists(WALLET_FILE):
         print(f"{Colors.RED}❌ Error: Wallet file '{WALLET_FILE}' not found.{Colors.ENDC}")
         return None
@@ -94,6 +97,7 @@ def load_mnemonic(password: str) -> str:
 # API INTERACTION
 # =============================================================================
 def get_address_info(address: str):
+    # This block is correctly indented
     try:
         response = requests.get(f"{BFF_API_URL}/address/{address}")
         response.raise_for_status()
@@ -103,6 +107,7 @@ def get_address_info(address: str):
         return None
 
 def send_transaction(key_pair: SigningKey, recipient: str, amount: float, fee: float):
+    # This block is correctly indented
     public_key_hex = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
     tx_data = {'sender': public_key_hex, 'recipient': recipient, 'amount': amount, 'fee': fee}
     tx_data_str = json.dumps(tx_data, sort_keys=True)
@@ -122,6 +127,7 @@ def send_transaction(key_pair: SigningKey, recipient: str, amount: float, fee: f
 # =============================================================================
 
 def handle_manage_wallet():
+    # This block is correctly indented
     if os.path.exists(WALLET_FILE):
         print(f"{Colors.YELLOW}⚠️ Warning: A wallet file ('{WALLET_FILE}') already exists.{Colors.ENDC}")
         overwrite = input("Continuing will overwrite it. Are you sure? (yes/no): ").lower()
@@ -149,12 +155,14 @@ def handle_manage_wallet():
         print(f"{Colors.RED}Invalid choice.{Colors.ENDC}")
     
 def handle_address():
+    # This block is correctly indented
     key_pair = get_unlocked_wallet()
     if not key_pair: return
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
     print(f"\n{Colors.CYAN}🔑 Your BunkNet Public Address:{Colors.ENDC}"); print(public_key)
     
 def handle_balance():
+    # This block is correctly indented
     key_pair = get_unlocked_wallet()
     if not key_pair: return
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
@@ -163,6 +171,7 @@ def handle_balance():
     print(f"\n{Colors.GREEN}💰 Balance: {info.get('balance', 0):.4f} $BUNK{Colors.ENDC}")
 
 def handle_history():
+    # This block is correctly indented
     key_pair = get_unlocked_wallet()
     if not key_pair: return
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
@@ -185,6 +194,7 @@ def handle_history():
             print(f"{color_code}{direction}{Colors.ENDC} | To/From: {other_party[:15]:<15} | Amount: {tx['amount']:.2f} | Fee: {tx.get('fee', 0):.4f}")
 
 def handle_send():
+    # This block is correctly indented
     key_pair = get_unlocked_wallet()
     if not key_pair: return
     public_key = binascii.hexlify(key_pair.get_verifying_key().to_string()).decode()
@@ -221,6 +231,7 @@ def handle_send():
     send_transaction(key_pair, recipient, amount, fee)
 
 def handle_backup():
+    # This block is correctly indented
     password = getpass.getpass("Enter password to unlock wallet: ")
     mnemonic = load_mnemonic(password)
     if not mnemonic: return
@@ -234,10 +245,9 @@ def handle_backup():
 # MAIN APPLICATION LOOP
 # =============================================================================
 def display_menu():
-def display_menu():
+    # This function and its contents are correctly indented
     """Clears the screen and displays the main menu."""
     os.system('cls' if os.name == 'nt' else 'clear')
-    # User-provided ASCII Art for "BunkNet Wallet"
     art = rf"""
 {Colors.CYAN}************************************************************************
 * /$$$$$$$                      /$$       /$$   /$$             /$$    *
@@ -249,14 +259,14 @@ def display_menu():
 *| $$$$$$$/|  $$$$$$/| $$  | $$| $$ \  $$| $$ \  $$|  $$$$$$$  |  $$$$/*
 *|_______/  \______/ |__/  |__/|__/  \__/|__/  \__/ \_______/   \___/  *
 * *
-*           /$$      /$$           /$$ /$$             /$$             *
-*           | $$  /$ | $$          | $$| $$            | $$            *
-*           | $$ /$$$| $$  /$$$$$$ | $$| $$  /$$$$$$  /$$$$$$          *
-*           | $$/$$ $$ $$ |____  $$| $$| $$ /$$__  $$|_  $$_/          *
-*           | $$$$_  $$$$  /$$$$$$$| $$| $$| $$$$$$$$  | $$            *
-*           | $$$/ \  $$$ /$$__  $$| $$| $$| $$_____/  | $$ /$$        *
-*           | $$/   \  $$|  $$$$$$$| $$| $$|  $$$$$$$  |  $$$$/        *
-*           |__/     \__/ \_______/|__/|__/ \_______/   \___/          *
+*          /$$      /$$           /$$ /$$             /$$              *
+*          | $$  /$ | $$          | $$| $$            | $$             *
+*          | $$ /$$$| $$  /$$$$$$ | $$| $$  /$$$$$$  /$$$$$$           *
+*          | $$/$$ $$ $$ |____  $$| $$| $$ /$$__  $$|_  $$_/           *
+*          | $$$$_  $$$$  /$$$$$$$| $$| $$| $$$$$$$$  | $$             *
+*          | $$$/ \  $$$ /$$__  $$| $$| $$| $$_____/  | $$ /$$         *
+*          | $$/   \  $$|  $$$$$$$| $$| $$|  $$$$$$$  |  $$$$/         *
+*          |__/     \__/ \_______/|__/|__/ \_______/   \___/           *
 ************************************************************************{Colors.ENDC}
 """
     print(art)
@@ -268,14 +278,17 @@ def display_menu():
     print(f"    {Colors.BLUE}6.{Colors.ENDC} View Transaction History")
     print(f"\n    {Colors.YELLOW}q.{Colors.ENDC} Quit")
     print("=" * 88)
-    
+
 def main():
+    # IMPORTANT: The 'while' loop below MUST be indented inside the main() function
     """The main function to run the interactive tool."""
     while True:
+        # These lines MUST be indented inside the 'while' loop
         display_menu()
         choice = input(f"{Colors.BOLD}Enter your choice: {Colors.ENDC}").lower()
 
         if choice == '1':
+            # This line MUST be indented inside the 'if' statement
             handle_manage_wallet()
         elif choice == '2':
             handle_address()
@@ -293,10 +306,11 @@ def main():
         else:
             print(f"{Colors.RED}Invalid choice, please try again.{Colors.ENDC}")
 
-        # Pause before clearing the screen and showing the menu again
+        # This 'if' statement MUST be indented inside the 'while' loop
         if choice != 'q':
             input(f"\n{Colors.YELLOW}Press Enter to return to the menu...{Colors.ENDC}")
 
+# This is the final part of the script that makes it run
 if __name__ == '__main__':
     main()
-        
+            
