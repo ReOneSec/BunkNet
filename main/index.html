@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BunkNet | The Education Layer for the Decentralized Web</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-bg': '#0A0A0A',
+                        'brand-surface': '#1A1A1A',
+                        'brand-glass': 'rgba(26, 26, 26, 0.7)',
+                        'brand-border': 'rgba(255, 255, 255, 0.1)',
+                        'brand-text-primary': '#F5F5F7',
+                        'brand-text-secondary': '#A3A3A3',
+                        'brand-accent-start': '#007CF0',
+                        'brand-accent-end': '#00DFD8',
+                    },
+                    fontFamily: {
+                        'primary': ['Inter', 'sans-serif'],
+                        'mono': ['Roboto Mono', 'monospace'],
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 1s ease-out forwards',
+                        'subtle-glow': 'subtleGlow 4s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        subtleGlow: {
+                            '0%': { boxShadow: '0 0 20px 5px rgba(0, 124, 240, 0.2)' },
+                            '100%': { boxShadow: '0 0 30px 10px rgba(0, 223, 216, 0.2)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        .fade-in-section {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        .fade-in-section.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 10px;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #1A1A1A;
+            border: 3px solid #007CF0;
+        }
+    </style>
+</head>
+
+<body class="bg-brand-bg text-brand-text-primary font-primary antialiased selection:bg-brand-accent-start selection:text-white">
+
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
+        <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-brand-accent-start to-brand-accent-end rounded-full opacity-10 blur-[100px]"></div>
+        <div class="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-bl from-brand-accent-end to-fuchsia-600 rounded-full opacity-10 blur-[100px]"></div>
+    </div>
+
+    <header class="fixed top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl bg-brand-glass backdrop-blur-lg border border-brand-border rounded-xl z-50">
+        <div class="container mx-auto flex justify-between items-center p-4">
+            <a href="#" class="text-xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-cubes-stacked bg-clip-text text-transparent bg-gradient-to-br from-brand-accent-start to-brand-accent-end"></i>
+                <span>BunkNet</span>
+            </a>
+            <nav class="hidden md:flex items-center gap-6">
+                <a href="#why-bunknet" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Why BunkNet?</a>
+                <a href="#milestones" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Milestones</a>
+                <a href="#roadmap" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Roadmap</a>
+                <a href="#get-started" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Start Building</a>
+            </nav>
+            <a href="https://github.com/ReOneSec/bunknet" target="_blank" rel="noopener noreferrer" class="hidden md:inline-block bg-brand-text-primary text-brand-bg font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-all">GitHub</a>
+            <button class="md:hidden text-xl mobile-nav-toggle">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+        <div class="md:hidden main-nav-mobile hidden border-t border-brand-border">
+             <nav class="flex flex-col items-center gap-4 py-4">
+                <a href="#why-bunknet" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Why BunkNet?</a>
+                <a href="#milestones" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Milestones</a>
+                <a href="#roadmap" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Roadmap</a>
+                <a href="#get-started" class="text-brand-text-secondary hover:text-brand-text-primary transition-colors">Start Building</a>
+                <a href="https://github.com/ReOneSec/bunknet" target="_blank" rel="noopener noreferrer" class="bg-brand-text-primary text-brand-bg font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-all w-4/5 text-center mt-2">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="pt-32">
+        <section class="text-center px-4">
+            <div class="max-w-4xl mx-auto">
+                <div class="animate-fade-in-up">
+                    <h1 class="text-5xl md:text-7xl font-black leading-tight bg-clip-text text-transparent bg-gradient-to-b from-brand-text-primary to-brand-text-secondary">
+                        The Education Layer for the Decentralized Web
+                    </h1>
+                    <p class="max-w-2xl mx-auto mt-6 text-lg text-brand-text-secondary">
+                        BunkNet is a hands-on, risk-free ecosystem designed to onboard the next generation of Web3 builders. Learn, build, and deploy without the complexity or cost.
+                    </p>
+                </div>
+              <div class="mt-12 p-1.5 bg-brand-surface border border-brand-border rounded-xl inline-flex flex-wrap gap-2 animate-fade-in-up" style="animation-delay: 0.3s;">
+                    <a href="https://explorer.bunknet.online" target="_blank" rel="noopener noreferrer" class="flex-grow bg-brand-bg hover:bg-opacity-80 text-brand-text-primary font-medium py-3 px-5 rounded-lg flex items-center justify-center gap-2 transition-all">
+                        <i class="fa-solid fa-search-plus text-brand-accent-start"></i> Explorer
+                    </a>
+                    <a href="https://faucet.bunknet.online" target="_blank" rel="noopener noreferrer" class="flex-grow bg-brand-bg hover:bg-opacity-80 text-brand-text-primary font-medium py-3 px-5 rounded-lg flex items-center justify-center gap-2 transition-all">
+                        <i class="fa-solid fa-faucet-drip text-brand-accent-end"></i> Faucet
+                    </a>
+                    <a href="t.me/BUNKPay_Bot" target="_blank" rel="noopener noreferrer" class="flex-grow bg-brand-bg hover:bg-opacity-80 text-brand-text-primary font-medium py-3 px-5 rounded-lg flex items-center justify-center gap-2 transition-all">
+                        <i class="fa-brands fa-telegram text-[#2AABEE]"></i>Telegram Wallet
+                    </a>
+                    <a href="https://github.com/ReOneSec/BunkNet" target="_blank" rel="noopener noreferrer" class="flex-grow bg-brand-bg hover:bg-opacity-80 text-brand-text-primary font-medium py-3 px-5 rounded-lg flex items-center justify-center gap-2 transition-all">
+                        <i class="fa-solid fa-terminal text-gray-400"></i> CLI Wallet
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section id="why-bunknet" class="py-24 px-4 fade-in-section">
+            <div class="container mx-auto">
+                <div class="text-center">
+                    <h2 class="text-4xl font-bold mb-4">Why is BunkNet Necessary?</h2>
+                    <p class="text-brand-text-secondary max-w-3xl mx-auto">The path into Web3 is steep and filled with friction. Developers face fragmented tools, high costs on mainnet, and a daunting learning curve. We built BunkNet to be the "flight simulator" for blockchain—a place to learn, experiment, and fail safely.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+                    <div class="bg-brand-surface border border-brand-border p-8 rounded-2xl">
+                        <i class="fa-solid fa-shield-halved text-3xl mb-4 bg-clip-text text-transparent bg-gradient-to-br from-brand-accent-start to-brand-accent-end"></i>
+                        <h3 class="text-xl font-bold mb-2">Zero-Risk Environment</h3>
+                        <p class="text-brand-text-secondary">Our BUNK token has no monetary value. This intentional design choice eliminates financial speculation and keeps the focus entirely on learning and development.</p>
+                    </div>
+                    <div class="bg-brand-surface border border-brand-border p-8 rounded-2xl">
+                        <i class="fa-solid fa-puzzle-piece text-3xl mb-4 bg-clip-text text-transparent bg-gradient-to-br from-brand-accent-start to-brand-accent-end"></i>
+                        <h3 class="text-xl font-bold mb-2">Integrated Toolchain</h3>
+                        <p class="text-brand-text-secondary">We provide an end-to-end ecosystem. The testnet, explorer, wallets, and faucet are designed to work together, providing a smooth, cohesive developer experience.</p>
+                    </div>
+                    <div class="bg-brand-surface border border-brand-border p-8 rounded-2xl">
+                        <i class="fa-solid fa-graduation-cap text-3xl mb-4 bg-clip-text text-transparent bg-gradient-to-br from-brand-accent-start to-brand-accent-end"></i>
+                        <h3 class="text-xl font-bold mb-2">Designed for Pedagogy</h3>
+                        <p class="text-brand-text-secondary">BunkNet is more than a testnet; it's a teaching tool. Every feature is built with the learner in mind, from descriptive explorer data to our guided, hands-on tutorials.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="milestones" class="py-24 px-4 fade-in-section">
+             <div class="container mx-auto max-w-4xl">
+                <h2 class="text-center text-4xl font-bold mb-16">Our Journey So Far</h2>
+                <div class="relative pl-8 border-l-2 border-brand-border">
+                    <div class="timeline-item mb-12">
+                        <p class="font-mono text-sm text-brand-accent-start">DEC 2024</p>
+                        <h3 class="text-2xl font-bold mt-1">Project Inception</h3>
+                        <p class="text-brand-text-secondary mt-2">The BunkNet whitepaper was published, outlining our vision for a pedagogical blockchain ecosystem to empower developers in India and worldwide.</p>
+                    </div>
+                     <div class="timeline-item mb-12">
+                        <p class="font-mono text-sm text-brand-accent-start">AUG 2025</p>
+                        <h3 class="text-2xl font-bold mt-1">Testnet & Core Tools Launch</h3>
+                        <p class="text-brand-text-secondary mt-2">BunkChain Testnet v1.0 went live, alongside the BunkScan Explorer and the initial BUNK token faucet, providing the foundational layer of our platform.</p>
+                    </div>
+                     <div class="timeline-item mb-12">
+                        <p class="font-mono text-sm text-brand-accent-start">AUG 2025</p>
+                        <h3 class="text-2xl font-bold mt-1">Community Growth & Wallet Release</h3>
+                        <p class="text-brand-text-secondary mt-2">Launched the versatile CLI Wallet for developers and the user-friendly BunkPay Telegram Bot. Crossed the milestone of 10,000 active learners on the platform.</p>
+                    </div>
+                    <div class="timeline-item">
+                         <p class="font-mono text-sm text-brand-accent-start">SEP 2025</p>
+                         <h3 class="text-2xl font-bold mt-1">First BunkNet Hackathon</h3>
+                         <p class="text-brand-text-secondary mt-2">We Will host our first virtual hackathon in partnership with leading tech institutes, fostering innovation and practical learning among students.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="get-started" class="py-24 px-4 fade-in-section">
+            <div class="container mx-auto">
+                <div class="text-center">
+                    <h2 class="text-4xl font-bold mb-4">Start Your Journey Here</h2>
+                    <p class="text-brand-text-secondary max-w-2xl mx-auto mb-16">Get up and running with the BunkNet ecosystem in a matter of minutes.</p>
+                </div>
+
+                <div class="max-w-4xl mx-auto mb-16">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="flex-shrink-0 w-12 h-12 bg-brand-surface border border-brand-border rounded-full flex items-center justify-center text-xl font-bold text-brand-accent-start">1</div>
+                        <div>
+                            <h3 class="text-2xl font-bold">Install the Project</h3>
+                            <p class="text-brand-text-secondary">Clone the repository and install the required Python libraries.</p>
+                        </div>
+                    </div>
+                    <div class="max-w-full mx-auto bg-brand-glass backdrop-blur-xl border border-brand-border rounded-xl shadow-2xl shadow-black/50">
+                        <div class="flex items-center gap-2 px-4 py-3 border-b border-brand-border">
+                            <div class="w-3 h-3 bg-[#FF5F56] rounded-full"></div>
+                            <div class="w-3 h-3 bg-[#FFBD2E] rounded-full"></div>
+                            <div class="w-3 h-3 bg-[#27C93F] rounded-full"></div>
+                            <div class="flex-grow text-center font-mono text-sm text-brand-text-secondary">bunknet-setup -- bash</div>
+                        </div>
+                        <div class="p-6 font-mono text-sm overflow-x-auto">
+                            <pre><code class="language-bash"><span class="text-cyan-400">~ $</span> git clone https://github.com/ReOneSec/BunkNet.git
+<span class="text-gray-400">Cloning into 'BunkNet'...
+... done.</span>
+
+<span class="text-cyan-400">~ $</span> cd BunkNet
+
+<span class="text-cyan-400">~/BunkNet $</span> pip install -r requirements.txt
+<span class="text-gray-400">Collecting requests...</span>
+    
+<span class="text-cyan-400">~/BunkNet $</span> python3 blockchain.py [explorer.py & validator.py too]
+<span class="text-gray-400"> Deployment Successfull... 
+...
+Successfully installed ecdsa mnemonic pycryptodome requests</span></code></pre>
+                        </div>
+                    </div>
+                </div>
+                    <div class="max-w-full mx-auto bg-brand-glass backdrop-blur-xl border border-brand-border rounded-xl shadow-2xl shadow-black/50">
+                        <div class="flex items-center gap-2 px-4 py-3 border-b border-brand-border">
+                            <div class="w-3 h-3 bg-[#FF5F56] rounded-full"></div>
+                            <div class="w-3 h-3 bg-[#FFBD2E] rounded-full"></div>
+                            <div class="w-3 h-3 bg-[#27C93F] rounded-full"></div>
+                            <div class="flex-grow text-center font-mono text-sm text-brand-text-secondary">cli-wallet-setup -- bash</div>
+                        </div>
+                        <div class="p-6 font-mono text-sm overflow-x-auto">
+                            <pre><code class="language-bash"><span class="text-cyan-400">~ $</span> git clone https://github.com/ReOneSec/BunkNet.git
+<span class="text-gray-400">Cloning into 'BunkNet'...
+... done.</span>
+
+<span class="text-cyan-400">~ $</span> cd BunkNet/cli-wallet
+
+<span class="text-cyan-400">~/BunkNet $</span> python3 wallet.py
+<span class="text-gray-400">Wallet will open and you can see 6 options, click 1 create/import wallet</span>
+    
+<span class="text-cyan-400">~/BunkNet/cli-wallet $</span> You Can View Address, Send $BUNK to others, view seed phase, view history.
+<span class="text-gray-400"> You've landed Successfull... 
+...
+</span></code></pre>
+                        </div>
+                    </div>
+                </div>
+            <br> </br>
+                <div class="max-w-4xl mx-auto">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="flex-shrink-0 w-12 h-12 bg-brand-surface border border-brand-border rounded-full flex items-center justify-center text-xl font-bold text-brand-accent-start">2</div>
+                        <div>
+                            <h3 class="text-2xl font-bold">Launch & Explore the Wallet</h3>
+                            <p class="text-brand-text-secondary">Run the wallet to access the interactive menu and manage your assets.</p>
+                        </div>
+                    </div>
+                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
+                        <div class="bg-brand-surface border border-brand-border p-6 rounded-2xl">
+                            <i class="fa-solid fa-plus-circle text-2xl mb-3 text-brand-accent-start"></i>
+                            <h4 class="text-lg font-bold">Create/Import</h4>
+                            <p class="text-sm text-brand-text-secondary mt-1">Generate a brand new secure wallet or recover an existing one using your 12-word seed phrase.</p>
+                        </div>
+                         <div class="bg-brand-surface border border-brand-border p-6 rounded-2xl">
+                            <i class="fa-solid fa-address-card text-2xl mb-3 text-brand-accent-start"></i>
+                            <h4 class="text-lg font-bold">View Address</h4>
+                            <p class="text-sm text-brand-text-secondary mt-1">Display your unique public address to receive $BUNK from the faucet or other users.</p>
+                        </div>
+                        <div class="bg-brand-surface border border-brand-border p-6 rounded-2xl">
+                            <i class="fa-solid fa-wallet text-2xl mb-3 text-brand-accent-start"></i>
+                            <h4 class="text-lg font-bold">Check Balance</h4>
+                            <p class="text-sm text-brand-text-secondary mt-1">Connect to the BunkNet testnet to get a real-time update of your $BUNK balance.</p>
+                        </div>
+                        <div class="bg-brand-surface border border-brand-border p-6 rounded-2xl">
+                            <i class="fa-solid fa-paper-plane text-2xl mb-3 text-brand-accent-start"></i>
+                            <h4 class="text-lg font-bold">Send $BUNK</h4>
+                            <p class="text-sm text-brand-text-secondary mt-1">Easily send tokens to any other BunkNet address with a simple, interactive confirmation process.</p>
+                        </div>
+                        <div class="bg-brand-surface border border-brand-border p-6 rounded-2xl">
+                            <i class="fa-solid fa-history text-2xl mb-3 text-brand-accent-start"></i>
+                            <h4 class="text-lg font-bold">View History</h4>
+                            <p class="text-sm text-brand-text-secondary mt-1">See a clear log of all your incoming (green) and outgoing (red) transactions.</p>
+                        </div>
+                        <div class="bg-brand-surface border border-brand-border p-6 rounded-2xl">
+                            <i class="fa-solid fa-seedling text-2xl mb-3 text-brand-accent-start"></i>
+                            <h4 class="text-lg font-bold">Backup Seed</h4>
+                            <p class="text-sm text-brand-text-secondary mt-1">Securely view your secret seed phrase. This is your master key—keep it safe!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+<section id="roadmap" class="py-24 px-4 fade-in-section">
+            <div class="container mx-auto">
+                <h2 class="text-center text-4xl font-bold mb-4">Our Roadmap to the Future</h2>
+                <p class="text-center text-brand-text-secondary max-w-2xl mx-auto mb-16">We're just getting started. Here's what's next on our mission to revolutionize Web3 education.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                    <div class="bg-brand-surface border border-brand-border p-8 rounded-2xl">
+                        <p class="font-mono text-sm text-brand-accent-start">PHASE 01 // Q4 2025</p>
+                        <h3 class="text-2xl font-bold mt-2 mb-4">Interactive Learning Platform</h3>
+                        <ul class="space-y-3 text-brand-text-secondary">
+                            <li class="flex items-start gap-3"><i class="fa-solid fa-check mt-1 text-green-400"></i><span>Launch web-based interactive tutorials with an integrated code editor.</span></li>
+                            <li class="flex items-start gap-3"><i class="fa-solid fa-check mt-1 text-green-400"></i><span>Establish partnerships with 5+ top universities in India for curriculum integration.</span></li>
+                        </ul>
+                    </div>
+                    <div class="bg-brand-surface border border-brand-border p-8 rounded-2xl">
+                        <p class="font-mono text-sm text-brand-accent-start">PHASE 02 // Q1 2026</p>
+                        <h3 class="text-2xl font-bold mt-2 mb-4">Empowering Builders</h3>
+                        <ul class="space-y-3 text-brand-text-secondary">
+                            <li class="flex items-start gap-3"><i class="fa-solid fa-check mt-1 text-green-400"></i><span>Initiate the "BunkNet Builders Grant" to fund innovative educational dApps.</span></li>
+                            <li class="flex items-start gap-3"><i class="fa-solid fa-check mt-1 text-green-400"></i><span>Introduce a visual smart contract wizard for no-code experimentation.</span></li>
+                        </ul>
+                    </div>
+                     <div class="bg-brand-surface border border-brand-border p-8 rounded-2xl">
+                        <p class="font-mono text-sm text-brand-accent-start">PHASE 03 // FUTURE VISION</p>
+                        <h3 class="text-2xl font-bold mt-2 mb-4">Decentralization & Scale</h3>
+                        <ul class="space-y-3 text-brand-text-secondary">
+                            <li class="flex items-start gap-3"><i class="fa-solid fa-check mt-1 text-green-400"></i><span>Launch a mock DAO for community governance on platform features.</span></li>
+                            <li class="flex items-start gap-3"><i class="fa-solid fa-check mt-1 text-green-400"></i><span>Develop a testnet bridge to Sepolia for learning cross-chain communication.</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+    
+    <footer class="border-t border-brand-border text-center py-8 px-4 mt-20">
+        <p class="text-brand-text-secondary">&copy; 2025 BunkNet. Building the future, one developer at a time.</p>
+    </footer>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
