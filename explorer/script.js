@@ -1,5 +1,5 @@
 // --- CONFIGURATION ---
-const API_BASE_URL = "http://localhost:7000/api"; // Connect to the explorer.py BFF
+const API_BASE_URL = "/api"; // Connect to the explorer.py BFF
 
 // --- DOM ELEMENTS ---
 const appRoot = document.getElementById('app-root');
