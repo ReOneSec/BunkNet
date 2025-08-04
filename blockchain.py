@@ -224,10 +224,22 @@ def get_balance_endpoint():
 def get_transactions_for_address():
     address = request.args.get('address')
     if not address: return jsonify({"error": "Address query parameter is required"}), 400
-    pipeline = [{"$unwind": "$transactions"}, {"$match": {"$or": [{"transactions.sender": address}, {"transactions.recipient": address}]}}, {"$replaceRoot": {"newRoot": "$transactions"}}]
+    
+    # MODIFIED: This pipeline now includes the block_index in each transaction
+    pipeline = [
+        {"$unwind": "$transactions"},
+        {"$match": {"$or": [{"transactions.sender": address}, {"transactions.recipient": address}]}},
+        {
+            "$replaceRoot": {
+                "newRoot": {
+                    "$mergeObjects": ["$transactions", {"block_index": "$index"}]
+                }
+            }
+        }
+    ]
     transactions = list(blocks_col.aggregate(pipeline))
     return jsonify({"transactions": prepare_json_response(transactions)}), 200
-
+    
 @app.route('/faucet/drip', methods=['POST'])
 def faucet_drip():
     if not faucet_private_key: return jsonify({'error': 'Faucet is not configured.'}), 501
@@ -298,4 +310,3 @@ def consensus():
 
 if __name__ == '__main__':
     parser = ArgumentParser(); parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on'); args = parser.parse_args(); app.run(host='0.0.0.0', port=args.port, debug=True)
-  
