@@ -123,7 +123,7 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         response.raise_for_status()
         balance_val = response.json().get('balance', 0)
         balance_str = escape_markdown(f"{balance_val:.4f}")
-        message = f"Your current balance is:\n\n`{balance_str}` *$BUNK*"
+        message = f"Welcome to The BunkNet Wallet [$BUNK]\n\nYour current balance is:\n\n`{balance_str}` *$BUNK*"
     except requests.exceptions.RequestException: message = "Could not connect to the BunkNet network."
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
@@ -138,26 +138,62 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return MAIN_MENU
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
-    await query.message.delete() # ## MODIFIED ## - Delete the old menu
+    query = update.callback_query
+    await query.answer()
+    await query.message.delete()
+    
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
+    public_key = user_wallet['public_key']
+    
     try:
-        response = requests.get(f"{BFF_API_URL}/address/{user_wallet['public_key']}")
+        response = requests.get(f"{BFF_API_URL}/address/{public_key}")
         response.raise_for_status()
-        transactions = response.json().get('transactions', [])
-        if not transactions: message = "You have no transactions yet."
-        else:
-            message_parts = ["📜 *Your recent transactions:*\n"]
-            for tx in reversed(transactions[-5:]):
-                direction = "➡ Sent" if tx['sender'] == user_wallet['public_key'] else "⬅ Received"
-                amount_str = escape_markdown(f"{tx['amount']:.2f}")
-                other_party = tx['recipient'] if direction == "➡ Sent" else tx['sender']
-                message_parts.append(f"`{direction}` `{amount_str} $BUNK`\n*To/From:* `{other_party[:10]}...`\n")
-            message = "\n".join(message_parts)
-    except requests.exceptions.RequestException: message = "Could not fetch transaction history."
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
-    return MAIN_MENU
+        data = response.json()
+        transactions = data.get('transactions', [])
 
+        if not transactions:
+            message = "You have no transactions yet."
+        else:
+            message_parts = ["*📜 Your 5 most recent transactions:*\n"]
+            # We process the list in reverse to show the latest first
+            for tx in reversed(transactions[-5:]):
+                direction_icon = "➡" if tx['sender'] == public_key else "⬅"
+                direction_text = "Sent" if tx['sender'] == public_key else "Received"
+                
+                # Use helper function to escape markdown special characters
+                amount_str = escape_markdown(f"{tx['amount']:.4f}")
+                tx_id = tx['transaction_id']
+                short_hash = f"{tx_id[:6]}...{tx_id[-6:]}"
+                
+                # Construct the explorer URL using the block_index
+                # The block_index is now available thanks to our backend change
+                explorer_url = "https://explorer.bunknet.online" # Make sure this is your explorer's domain
+                if 'block_index' in tx:
+                    explorer_url += f"/#/block/{tx['block_index']}"
+                
+                # Build the message for this transaction
+                tx_info = (
+                    f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n"
+                    f"*Hash:* [{short_hash}]({explorer_url})"
+                )
+                message_parts.append(tx_info)
+            
+            # Join all parts with a double newline for spacing
+            message = "\n\n".join(message_parts)
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Could not fetch transaction history: {e}")
+        message = "Could not fetch transaction history from the network."
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=message,
+        parse_mode='MarkdownV2',
+        reply_markup=get_main_menu_keyboard(),
+        disable_web_page_preview=True # This makes the message cleaner
+    )
+    return MAIN_MENU
+                
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     # ## MODIFIED ## - Edit works here because the message is text-based
