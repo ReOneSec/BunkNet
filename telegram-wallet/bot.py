@@ -160,25 +160,25 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 direction_icon = "➡" if tx['sender'] == public_key else "⬅"
                 direction_text = "Sent" if tx['sender'] == public_key else "Received"
                 
-                # Use helper function to escape markdown special characters
                 amount_str = escape_markdown(f"{tx['amount']:.4f}")
                 tx_id = tx['transaction_id']
-                short_hash = f"{tx_id[:6]}...{tx_id[-6:]}"
                 
-                # Construct the explorer URL using the block_index
-                # The block_index is now available thanks to our backend change
-                explorer_url = "https://explorer.bunknet.online" # Make sure this is your explorer's domain
+                # --- THIS IS THE FIX ---
+                # We now escape the link text to handle the '...'
+                link_text = escape_markdown(f"{tx_id[:6]}...{tx_id[-6:]}")
+                # -----------------------
+                
+                explorer_url = "https://explorer.bunknet.online"
                 if 'block_index' in tx:
                     explorer_url += f"/#/block/{tx['block_index']}"
                 
-                # Build the message for this transaction
+                # Build the message for this transaction using the escaped link text
                 tx_info = (
                     f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n"
-                    f"*Hash:* [{short_hash}]({explorer_url})"
+                    f"*Hash:* [{link_text}]({explorer_url})"
                 )
                 message_parts.append(tx_info)
             
-            # Join all parts with a double newline for spacing
             message = "\n\n".join(message_parts)
 
     except requests.exceptions.RequestException as e:
@@ -190,7 +190,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         text=message,
         parse_mode='MarkdownV2',
         reply_markup=get_main_menu_keyboard(),
-        disable_web_page_preview=True # This makes the message cleaner
+        disable_web_page_preview=True
     )
     return MAIN_MENU
                 
