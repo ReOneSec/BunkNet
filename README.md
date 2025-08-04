@@ -32,7 +32,7 @@
 
 | Service          | Link                                                                                             | Status                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| 🌐 **Explorer** | [**explorer.bunknet.online**](http://explorer.bunknet.online)                                   | <img src="https://img.shields.io/website?url=http%3A%2F%2Fexplorer.bunknet.online&up_message=Online&down_message=Online&style=for-the-badge"> |
+| 🌐 **Explorer** | [**explorer.bunknet.online**](http://explorer.bunknet.online)                                   | <img src="https://img.shields.io/website?url=http%3A%2F%2Fexplorer.bunknet.online&up_message=Online&down_message=Offline&style=for-the-badge"> |
 | 💧 **Faucet** | [**faucet.bunknet.online**](http://faucet.bunknet.online)                                       | <img src="https://img.shields.io/website?url=http%3A%2F%2Ffaucet.bunknet.online&up_message=Online&down_message=Offline&style=for-the-badge"> |
 | 💼 **Web Wallet** | [**wallet.bunknet.online**](http://wallet.bunknet.online)                                       | <img src="https://img.shields.io/website?url=http%3A%2F%2Fwallet.bunknet.online&up_message=Online&down_message=Offline&style=for-the-badge"> |
 | 💻 **CLI Wallet** | [**github.com/ReOneSec/BunkNet**](https://github.com/ReOneSec/BunkNet)                           | <img src="https://img.shields.io/badge/Status-Available-brightgreen?style=for-the-badge">                |
