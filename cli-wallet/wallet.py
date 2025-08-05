@@ -12,6 +12,7 @@ from ecdsa import SECP256k1, SigningKey
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
+from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins
 
 # --- Configuration ---
 BFF_API_URL = "http://localhost:7000/api"
@@ -38,12 +39,29 @@ class Colors:
 
 mnemo = Mnemonic("english")
 
-def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
-    """Derives an ECDSA private key from a BIP39 mnemonic."""
-    seed = Mnemonic.to_seed(mnemonic)
-    private_key_bytes = seed[:32]
-    return SigningKey.from_string(private_key_bytes, curve=SECP256k1)
 
+
+def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
+    """
+    Derives an ECDSA private key from a BIP39 mnemonic using the standard
+    Ethereum derivation path (m/44'/60'/0'/0/0).
+    """
+    # Generate the master seed from the mnemonic
+    seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
+
+    # Create a Bip44 object from the seed for the Ethereum coin type
+    bip44_mst_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
+
+    # Derive the account key following the standard path
+    # m/44'/60'/0'/0/0
+    bip44_acc_ctx = bip44_mst_ctx.Purpose().Coin().Account(0).Change(0).AddressIndex(0)
+
+    # Get the private key bytes
+    private_key_bytes = bip44_acc_ctx.PrivateKey().Raw().ToBytes()
+
+    # Return the ecdsa SigningKey object
+    return SigningKey.from_string(private_key_bytes, curve=SECP256k1)
+    
 def encrypt_data(data: bytes, password: str) -> bytes:
     salt = get_random_bytes(SALT_SIZE)
     key = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, PBKDF2_ITERATIONS, dklen=AES_KEY_LEN)
@@ -139,7 +157,7 @@ def handle_manage_wallet():
         if password != confirm_password: print(f"{Colors.RED}❌ Passwords do not match.{Colors.ENDC}"); return
         save_wallet(mnemonic, password)
     elif choice == 'i':
-        mnemonic = input("Enter your 12-word seed phrase: ").strip().lower()
+        mnemonic = input("your 12-word seed phrase: ").strip().lower()
         if not mnemo.check(mnemonic): print(f"{Colors.RED}❌ Invalid seed phrase.{Colors.ENDC}"); return
         password = getpass.getpass("Enter a strong password to encrypt this wallet: ")
         confirm_password = getpass.getpass("Confirm password: ")
