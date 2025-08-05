@@ -296,19 +296,28 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data.clear()
     return MAIN_MENU
 
-# --- Main Application Runner ---
+# =============================================================================
+# MAIN APPLICATION LOOP
+# =============================================================================
 def main() -> None:
+    """The main function to run the bot."""
+    # This block is indented once (e.g., 4 spaces)
     if not TELEGRAM_BOT_TOKEN or not BOT_SECRET_KEY:
-        logging.error("Bot tokens and secret key must be set in the .env file."); return
-application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
+        # This block is indented twice (e.g., 8 spaces)
+        logging.error("Bot tokens and secret key must be set in the .env file.")
+        return
 
-    
+    # These lines are all at the same indentation level (one indent)
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
             MAIN_MENU: [
-                CallbackQueryHandler(balance, pattern='^balance$'), CallbackQueryHandler(history, pattern='^history$'),
-                CallbackQueryHandler(receive, pattern='^receive$'), CallbackQueryHandler(settings, pattern='^settings$'),
+                CallbackQueryHandler(balance, pattern='^balance$'),
+                CallbackQueryHandler(history, pattern='^history$'),
+                CallbackQueryHandler(receive, pattern='^receive$'),
+                CallbackQueryHandler(settings, pattern='^settings$'),
                 CallbackQueryHandler(protected_action_start, pattern='^(send|backup)$'),
             ],
             SETTINGS_MENU: [
@@ -327,12 +336,14 @@ application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).bu
         fallbacks=[CommandHandler('start', start), CommandHandler('help', help_command), CommandHandler('cancel', cancel)],
         per_user=True, per_chat=True
     )
+
     application.add_handler(CommandHandler("address", receive))
     application.add_handler(conv_handler)
     
     logging.info("Bot is starting...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
+
 if __name__ == "__main__":
     main()
-        
+    
