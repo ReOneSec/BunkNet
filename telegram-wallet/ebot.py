@@ -171,7 +171,6 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await context.bot.send_photo(chat_id=chat_id, photo=bio, caption=caption, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
 
-# --- UPDATED history function ---
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer(); await query.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
@@ -183,7 +182,6 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         transactions = data.get('transactions', [])
 
         if not transactions:
-        
             message = escape_markdown("You have no transactions yet.")
         else:
             message_parts = ["*📜 Your 5 most recent transactions:*\n"]
@@ -200,7 +198,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 
                 tx_id = tx.get('transaction_id', 'N/A')
                 link_text = escape_markdown(f"{tx_id[:6]}...{tx_id[-6:]}")
-                explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+                explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}" # Consistent explorer link
                 
                 tx_info = (f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n"
                            f"*To/From:* `{display_address}`\n"
@@ -305,30 +303,70 @@ async def get_fee(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     except ValueError: await update.message.reply_text("Invalid fee. Cancelling."); return ConversationHandler.END
 
 async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
+    query = update.callback_query
+    await query.answer()
+
     if query.data == "confirm_send":
-        await query.edit_message_text(text="Sending transaction...")
+        await query.edit_message_text(text="Broadcasting transaction to the network...")
+        
+        # Get all necessary data
         user_wallet = get_or_create_wallet(update.effective_user.id, "")
         mnemonic = decrypt_mnemonic(user_wallet['encrypted_mnemonic'], update.effective_user.id)
         private_key = get_keys_from_mnemonic(mnemonic)
         verifying_key = private_key.get_verifying_key()
         sender_address = public_key_to_address(verifying_key)
         public_key = binascii.hexlify(verifying_key.to_string()).decode()
-        tx_data = {'sender': sender_address, 'recipient': context.user_data['recipient'], 'amount': context.user_data['amount'], 'fee': context.user_data['fee']}
-        tx_hash = hashlib.sha256(json.dumps(tx_data, sort_keys=True).encode()).digest()
-        signature = binascii.hexlify(private_key.sign(tx_hash)).decode()
+        
+        recipient = context.user_data['recipient']
+        amount = context.user_data['amount']
+        fee = context.user_data['fee']
+        
+        # Build transaction payload
+        tx_data = {'sender': sender_address, 'recipient': recipient, 'amount': amount, 'fee': fee}
+        tx_hash_bytes = hashlib.sha256(json.dumps(tx_data, sort_keys=True).encode()).digest()
+        signature = binascii.hexlify(private_key.sign(tx_hash_bytes)).decode()
         payload = {**tx_data, 'public_key': public_key, 'signature': signature}
+        
         try:
-            response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload); response.raise_for_status()
-            result_message = "✅ Transaction sent successfully!"
+            response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload)
+            response.raise_for_status()
+            response_data = response.json()
+            
+            # Extract the transaction ID from the API response
+            tx_id = response_data.get('transaction_id')
+
+            if tx_id:
+                # Create the new, detailed success message
+                amount_str = escape_markdown(f"{amount:.4f}")
+                recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
+                explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+                
+                result_message = (
+                    f"✅ *Transaction Successful*\n\n"
+                    f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
+                    f"*Hash:* `{escape_markdown(tx_id)}`\n\n"
+                    f"[View on BunkScan Explorer]({explorer_url})"
+                )
+            else:
+                # Fallback message if the hash isn't in the response for some reason
+                result_message = escape_markdown("✅ Transaction sent successfully, but could not retrieve transaction hash.")
+
         except requests.exceptions.RequestException as e:
             error_msg = "Could not send transaction."
-            try: error_msg = e.response.json().get('error', error_msg)
+            try:
+                error_msg = e.response.json().get('error', error_msg)
             except: pass
-            result_message = f"❌ Error: {error_msg}"
-        await query.edit_message_text(text=result_message, reply_markup=get_main_menu_keyboard())
-    else:
+            result_message = f"❌ *Transaction Failed*\n\n`{escape_markdown(error_msg)}`"
+
+        await query.edit_message_text(
+            text=result_message,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode='MarkdownV2',
+            disable_web_page_preview=True
+        )
+    else:  # User clicked cancel
         await query.edit_message_text(text="Transaction cancelled.", reply_markup=get_main_menu_keyboard())
+    
     context.user_data.clear()
     return MAIN_MENU
 
@@ -382,4 +420,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
