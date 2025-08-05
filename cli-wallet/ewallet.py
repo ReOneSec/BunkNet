@@ -12,7 +12,9 @@ from Crypto.Hash import keccak
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
-from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins # <-- NEW IMPORT
+from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins
+from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes
+
 
 # --- Configuration ---
 # Updated to your live API URL
@@ -34,6 +36,7 @@ class Colors:
 mnemo = Mnemonic("english")
 
 # --- 1. REPLACED KEY DERIVATION FUNCTION ---
+
 def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
     """
     Derives an ECDSA private key from a BIP39 mnemonic using the standard
@@ -41,10 +44,14 @@ def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
     """
     seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
     bip44_mst_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
-    bip44_acc_ctx = bip44_mst_ctx.Purpose().Coin().Account(0).Change(0).AddressIndex(0)
+
+    # --- THIS IS THE LINE THAT WAS FIXED ---
+    # We now use Bip44Changes.CHAIN_EXT instead of the number 0
+    bip44_acc_ctx = bip44_mst_ctx.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0)
+
     private_key_bytes = bip44_acc_ctx.PrivateKey().Raw().ToBytes()
     return SigningKey.from_string(private_key_bytes, curve=SECP256k1)
-
+    
 # --- 2. NEW ADDRESS CALCULATION FUNCTION ---
 def public_key_to_address(verifying_key: VerifyingKey) -> str:
     """Converts an ECDSA public key to a standard 0x-prefixed Ethereum address."""
