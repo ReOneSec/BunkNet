@@ -14,7 +14,7 @@ from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 
 # --- Configuration ---
-BFF_API_URL = "http://localhost:7000/api"
+BFF_API_URL = "https://api.bunknet.online/explorer/api"
 WALLET_FILE = "wallet.dat"
 SALT_SIZE = 16
 AES_KEY_LEN = 32
