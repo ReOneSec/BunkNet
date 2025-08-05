@@ -140,7 +140,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # --- Simple Button Actions ---
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer(); await query.message.delete()
+    query = update.callback_query; await query.answer()
+    await query.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
     try:
         response = requests.get(f"{BFF_API_URL}/address/{user_wallet['address']}")
@@ -148,8 +149,16 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         balance_val = response.json().get('balance', 0)
         balance_str = escape_markdown(f"{balance_val:.4f}")
         message = f"Your current balance is:\n\n`{balance_str}` *$BUNK*"
-    except requests.exceptions.RequestException: message = "Could not connect to the BunkNet network."
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+    except requests.exceptions.RequestException:
+        # THE FIX: We now escape the static error message.
+        message = escape_markdown("Could not connect to the BunkNet network.")
+        
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, 
+        text=message, 
+        parse_mode='MarkdownV2', 
+        reply_markup=get_main_menu_keyboard()
+    )
     return MAIN_MENU
 
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -162,14 +171,20 @@ async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await context.bot.send_photo(chat_id=chat_id, photo=bio, caption=caption, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
 
+# --- UPDATED history function ---
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer(); await query.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
     address = user_wallet['address']
+    
     try:
         response = requests.get(f"{BFF_API_URL}/address/{address}"); response.raise_for_status()
-        transactions = response.json().get('transactions', [])
-        if not transactions: message = "You have no transactions yet."
+        data = response.json()
+        transactions = data.get('transactions', [])
+
+        if not transactions:
+        
+            message = escape_markdown("You have no transactions yet.")
         else:
             message_parts = ["*📜 Your 5 most recent transactions:*\n"]
             for tx in reversed(transactions[-5:]):
@@ -177,14 +192,35 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 direction_text = "Sent" if tx['sender'] == address else "Received"
                 amount_str = escape_markdown(f"{tx['amount']:.4f}")
                 other_party_addr = tx['recipient'] if direction_text == "Sent" else tx['sender']
-                display_address = escape_markdown("Network Reward") if other_party_addr == '0' else escape_markdown(f"{other_party_addr[:6]}...{other_party_addr[-6:]}")
-                tx_info = (f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n*To/From:* `{display_address}`")
+                
+                if other_party_addr == '0':
+                    display_address = escape_markdown("Network Reward")
+                else:
+                    display_address = escape_markdown(f"{other_party_addr[:6]}...{other_party_addr[-6:]}")
+                
+                tx_id = tx.get('transaction_id', 'N/A')
+                link_text = escape_markdown(f"{tx_id[:6]}...{tx_id[-6:]}")
+                explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+                
+                tx_info = (f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n"
+                           f"*To/From:* `{display_address}`\n"
+                           f"*Hash:* [{link_text}]({explorer_url})")
                 message_parts.append(tx_info)
             message = "\n\n".join(message_parts)
+            
     except requests.exceptions.RequestException as e:
-        logging.error(f"Could not fetch transaction history: {e}"); message = "Could not fetch transaction history."
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+        logging.error(f"Could not fetch transaction history: {e}")
+        message = escape_markdown("Could not fetch transaction history from the network.")
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, 
+        text=message, 
+        parse_mode='MarkdownV2', 
+        reply_markup=get_main_menu_keyboard(), 
+        disable_web_page_preview=True
+    )
     return MAIN_MENU
+    
     
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
