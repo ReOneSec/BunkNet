@@ -79,6 +79,15 @@ def prepare_json_response(data):
         raise TypeError(f"Type {type(obj)} not serializable")
     return json.loads(json.dumps(data, default=json_serial))
 
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_key = request.headers.get('X-Admin-Key')
+        if not ADMIN_SECRET_KEY or auth_key != ADMIN_SECRET_KEY:
+            return jsonify({'error': 'Unauthorized: Admin key required'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 def p2p_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
