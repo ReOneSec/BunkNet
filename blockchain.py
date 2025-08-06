@@ -103,18 +103,53 @@ def public_key_to_address(verifying_key: ecdsa.VerifyingKey) -> str:
 # Core Blockchain Class
 # =============================================================================
 class Blockchain:
-    def __init__(self):
-        self.nodes = set()
-        if blocks_col.count_documents({}) == 0:
-            logging.info("No existing blockchain found. Creating genesis block...")
-            if not TREASURY_ADDRESS: raise ValueError("BUNKNET_TREASURY_ADDRESS must be set in .env")
+    # Find the Blockchain class and replace the __init__ function with this one.
+
+def __init__(self):
+    self.nodes = set()
+    # Check if the blockchain is already initialized
+    if blocks_col.count_documents({}) == 0:
+        logging.info("No existing blockchain found. Atomically creating genesis state...")
+        if not TREASURY_ADDRESS:
+            raise ValueError("FATAL: BUNKNET_TREASURY_ADDRESS must be set in your .env file before first run.")
+        
+        # Use an atomic session to create the entire genesis state reliably
+        try:
             with client.start_session() as session:
                 with session.start_transaction():
+                    # 1. Create the Treasury account state
                     state_col.insert_one({'_id': TREASURY_ADDRESS, 'balance': INITIAL_SUPPLY, 'nonce': 0}, session=session)
-                    genesis_tx = {'transaction_id': str(uuid.uuid4()),'sender': '0','recipient': TREASURY_ADDRESS,'amount': INITIAL_SUPPLY,'nonce': 0,'type': 'genesis_mint','timestamp': time.time()}
+                    
+                    # 2. Create the genesis transaction
+                    genesis_tx = {
+                        'transaction_id': str(uuid.uuid4()),
+                        'sender': '0',
+                        'recipient': TREASURY_ADDRESS,
+                        'amount': INITIAL_SUPPLY,
+                        'nonce': 0,
+                        'type': 'genesis_mint',
+                        'timestamp': time.time()
+                    }
+                    
+                    # 3. Create the genesis block
                     self.create_block(proof=1, previous_hash='0', transactions=[genesis_tx], session=session)
-                    config_col.update_one({'_id': 'config'}, {'$set': {'difficulty_prefix': '0000'}}, upsert=True, session=session)
-            logging.info("Genesis block and state created successfully.")
+                    
+                    # 4. Create the initial difficulty configuration document
+                    config_col.update_one(
+                        {'_id': 'config'},
+                        {'$set': {'difficulty_prefix': '0000'}},
+                        upsert=True,
+                        session=session
+                    )
+            logging.info("✅ Genesis block and state created successfully.")
+        except Exception as e:
+            logging.error(f"❌ FATAL: Could not create genesis block. Is MongoDB running as a replica set? Error: {e}")
+            # Clean up potentially partially created collections to allow a clean retry
+            blocks_col.delete_many({})
+            state_col.delete_many({})
+            config_col.delete_many({})
+            exit() # Exit the application as it cannot start in a valid state
+            
 
     def get_account_state(self, address, session=None):
         state = state_col.find_one({'_id': address}, session=session)
