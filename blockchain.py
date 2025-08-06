@@ -210,7 +210,18 @@ class Blockchain:
         return False
     
     # --- Helper methods ---
-    def get_difficulty_prefix(self, session=None): return config_col.find_one({'_id': 'config'}, session=session).get('difficulty_prefix', '0000')
+
+def get_difficulty_prefix(self, session=None):
+    """
+    Safely retrieves the current difficulty prefix from the config collection.
+    If the config doesn't exist, it returns a default value.
+    """
+    config = config_col.find_one({'_id': 'config'}, session=session)
+    if config:
+        return config.get('difficulty_prefix', '0000')
+    else:
+        return '0000'
+        
     def proof_of_work(self, previous_proof, session=None):
         new_proof = 1; difficulty_prefix = self.get_difficulty_prefix(session=session)
         while True:
