@@ -54,7 +54,6 @@ CORS(app)
 
 try:
     client = MongoClient(MONGO_URI)
-    # The ismaster command is cheap and does not require auth.
     client.admin.command('ismaster')
     logging.info("MongoDB connection successful.")
 except ConnectionFailure:
@@ -103,58 +102,23 @@ def public_key_to_address(verifying_key: ecdsa.VerifyingKey) -> str:
 # Core Blockchain Class
 # =============================================================================
 class Blockchain:
-    # Find the Blockchain class and replace the __init__ function with this one.
-
-def __init__(self):
-    self.nodes = set()
-    # Check if the blockchain is already initialized
-    if blocks_col.count_documents({}) == 0:
-        logging.info("No existing blockchain found. Atomically creating genesis state...")
-        if not TREASURY_ADDRESS:
-            raise ValueError("FATAL: BUNKNET_TREASURY_ADDRESS must be set in your .env file before first run.")
-        
-        # Use an atomic session to create the entire genesis state reliably
-        try:
+    def __init__(self):
+        self.nodes = set()
+        if blocks_col.count_documents({}) == 0:
+            logging.info("No existing blockchain found. Creating genesis block...")
+            if not TREASURY_ADDRESS: raise ValueError("BUNKNET_TREASURY_ADDRESS must be set in .env")
             with client.start_session() as session:
                 with session.start_transaction():
-                    # 1. Create the Treasury account state
                     state_col.insert_one({'_id': TREASURY_ADDRESS, 'balance': INITIAL_SUPPLY, 'nonce': 0}, session=session)
-                    
-                    # 2. Create the genesis transaction
-                    genesis_tx = {
-                        'transaction_id': str(uuid.uuid4()),
-                        'sender': '0',
-                        'recipient': TREASURY_ADDRESS,
-                        'amount': INITIAL_SUPPLY,
-                        'nonce': 0,
-                        'type': 'genesis_mint',
-                        'timestamp': time.time()
-                    }
-                    
-                    # 3. Create the genesis block
+                    genesis_tx = {'transaction_id': str(uuid.uuid4()),'sender': '0','recipient': TREASURY_ADDRESS,'amount': INITIAL_SUPPLY,'nonce': 0,'type': 'genesis_mint','timestamp': time.time()}
                     self.create_block(proof=1, previous_hash='0', transactions=[genesis_tx], session=session)
-                    
-                    # 4. Create the initial difficulty configuration document
-                    config_col.update_one(
-                        {'_id': 'config'},
-                        {'$set': {'difficulty_prefix': '0000'}},
-                        upsert=True,
-                        session=session
-                    )
-            logging.info("✅ Genesis block and state created successfully.")
-        except Exception as e:
-            logging.error(f"❌ FATAL: Could not create genesis block. Is MongoDB running as a replica set? Error: {e}")
-            # Clean up potentially partially created collections to allow a clean retry
-            blocks_col.delete_many({})
-            state_col.delete_many({})
-            config_col.delete_many({})
-            exit() # Exit the application as it cannot start in a valid state
-            
+                    config_col.update_one({'_id': 'config'}, {'$set': {'difficulty_prefix': '0000'}}, upsert=True, session=session)
+            logging.info("Genesis block and state created successfully.")
 
+    # ... (all class methods like get_account_state, process_transactions, mine_block, etc. remain the same as the previous robust version) ...
     def get_account_state(self, address, session=None):
         state = state_col.find_one({'_id': address}, session=session)
         return {'balance': state.get('balance', 0.0), 'nonce': state.get('nonce', 0)} if state else {'balance': 0.0, 'nonce': 0}
-
     def process_transactions(self, transactions, session=None):
         for tx in transactions:
             sender, recipient, amount = tx['sender'], tx['recipient'], tx['amount']
@@ -166,7 +130,6 @@ def __init__(self):
             recipient_state = self.get_account_state(recipient, session=session)
             new_recipient_balance = recipient_state['balance'] + amount
             state_col.update_one({'_id': recipient}, {'$set': {'balance': new_recipient_balance}}, upsert=True, session=session)
-
     def add_transaction_to_mempool(self, sender, recipient, amount, fee, nonce, signature, public_key):
         if not (sender.startswith('0x') and len(sender) == 42): return {'error': 'Invalid sender address format.'}
         tx_data = {'sender': sender, 'recipient': recipient, 'amount': float(amount), 'fee': float(fee), 'nonce': int(nonce)}
@@ -180,19 +143,22 @@ def __init__(self):
         full_tx = {**tx_data, 'transaction_id': str(uuid.uuid4()), 'type': 'transfer', 'timestamp': time.time(), 'signature': signature, 'public_key': public_key}
         mempool_col.insert_one(full_tx)
         return full_tx
-
     def mine_block(self):
+        prev_block = self.get_previous_block()
+        if not prev_block:
+            logging.error("Could not find previous block to mine on top of.")
+            return None
+        proof = self.proof_of_work(prev_block['proof'])
         with client.start_session() as session:
             with session.start_transaction():
                 try:
-                    prev_block = self.get_previous_block(session=session)
-                    proof = self.proof_of_work(prev_block['proof'], session=session)
-                    mempool_txs = list(mempool_col.find({}, {'_id': 0}, session=session)) # Exclude MongoDB's _id
+                    prev_block_in_session = self.get_previous_block(session=session)
+                    mempool_txs = list(mempool_col.find({}, {'_id': 0}, session=session))
                     total_fees = sum(tx.get('fee', 0) for tx in mempool_txs)
                     reward_tx = {'transaction_id': str(uuid.uuid4()),'sender': '0','recipient': MINER_ADDRESS,'amount': BASE_BLOCK_REWARD + total_fees,'nonce': -1,'type': 'reward','timestamp': time.time()}
                     transactions_to_process = mempool_txs + [reward_tx]
                     self.process_transactions(transactions_to_process, session=session)
-                    block = self.create_block(proof, self.hash(prev_block), transactions_to_process, session=session)
+                    block = self.create_block(proof, self.hash(prev_block_in_session), transactions_to_process, session=session)
                     mempool_col.delete_many({}, session=session)
                     self.adjust_difficulty(block, session=session)
                     logging.info(f"Block {block['index']} mined successfully and state committed.")
@@ -200,7 +166,6 @@ def __init__(self):
                 except Exception as e:
                     logging.error(f"ATOMIC MINE FAILED: Transaction aborted due to an error: {e}")
                     return None
-    
     def adjust_difficulty(self, last_block, session=None):
         if last_block['index'] % DIFFICULTY_ADJUSTMENT_INTERVAL != 0 or last_block['index'] <= 1: return
         prev_adjustment_block = blocks_col.find_one({'index': last_block['index'] - DIFFICULTY_ADJUSTMENT_INTERVAL}, session=session)
@@ -213,50 +178,10 @@ def __init__(self):
         else: return
         logging.info(f"Adjusting difficulty from {len(current_prefix)} to {len(new_prefix)} zeros.")
         config_col.update_one({'_id': 'config'}, {'$set': {'difficulty_prefix': new_prefix}}, upsert=True, session=session)
-
-    def resolve_conflicts(self):
-        neighbours = self.nodes
-        new_chain = None
-        max_length = blocks_col.count_documents({})
-        for node in neighbours:
-            try:
-                headers = {'X-P2P-Key': P2P_SECRET_KEY}
-                response = requests.get(f'http://{node}/get_chain', headers=headers, timeout=5)
-                if response.status_code == 200:
-                    length, chain = response.json()['length'], response.json()['chain']
-                    if length > max_length and self.is_chain_valid(chain):
-                        max_length, new_chain = length, chain
-            except requests.exceptions.RequestException: continue
-        if new_chain:
-            logging.info("Found a longer valid chain. Atomically rebuilding local state...")
-            with client.start_session() as session:
-                with session.start_transaction():
-                    blocks_col.delete_many({}, session=session)
-                    blocks_col.insert_many(new_chain, session=session)
-                    state_col.delete_many({}, session=session)
-                    mempool_col.delete_many({}, session=session)
-                    logging.info("Re-processing transactions to rebuild the world state...")
-                    all_blocks = list(blocks_col.find(sort=[("index", 1)], session=session))
-                    for block in all_blocks:
-                        self.process_transactions(block['transactions'], session=session)
-            logging.info("State rebuild complete. Chain is now authoritative.")
-            return True
-        logging.info("Our chain is authoritative.")
-        return False
-    
-    # --- Helper methods ---
-
-def get_difficulty_prefix(self, session=None):
-    """
-    Safely retrieves the current difficulty prefix from the config collection.
-    If the config doesn't exist, it returns a default value.
-    """
-    config = config_col.find_one({'_id': 'config'}, session=session)
-    if config:
-        return config.get('difficulty_prefix', '0000')
-    else:
+    def get_difficulty_prefix(self, session=None):
+        config = config_col.find_one({'_id': 'config'}, session=session)
+        if config: return config.get('difficulty_prefix', '0000')
         return '0000'
-        
     def proof_of_work(self, previous_proof, session=None):
         new_proof = 1; difficulty_prefix = self.get_difficulty_prefix(session=session)
         while True:
@@ -284,47 +209,71 @@ def get_difficulty_prefix(self, session=None):
         block_copy = block.copy(); block_copy.pop('hash', None)
         block_string = json.dumps(block_copy, sort_keys=True, default=str).encode()
         return hashlib.sha256(block_string).hexdigest()
-    @staticmethod
-    def is_chain_valid(chain):
-        previous_block = chain[0]; i = 1
-        while i < len(chain):
-            block = chain[i]
-            if block['previous_hash'] != Blockchain.hash(previous_block): return False
-            proof, previous_proof = block['proof'], previous_block['proof']
-            hash_operation = hashlib.sha256(str(proof**2 - previous_proof**2).encode()).hexdigest()
-            if not hash_operation.startswith(block.get('difficulty_prefix', '0000')): return False
-            previous_block = block; i += 1
-        return True
-    def add_node(self, address):
-        parsed_url = urlparse(address)
-        self.nodes.add(parsed_url.netloc or parsed_url.path)
 
 # =============================================================================
 # Flask API Endpoints
 # =============================================================================
 blockchain = Blockchain()
 
+# --- NEW: Robust /status endpoint ---
 @app.route('/status', methods=['GET'])
 def get_status():
-    chain_length = blocks_col.count_documents({})
-    pending_transactions = mempool_col.count_documents({})
-    last_block = blockchain.get_previous_block()
-    avg_block_time = 0
-    if chain_length > 10:
-        recent_blocks = list(blocks_col.find({'index': {'$gt': chain_length - 10}}).sort("index", 1))
-        if len(recent_blocks) > 1:
-            time_diff = recent_blocks[-1]['timestamp'] - recent_blocks[0]['timestamp']
-            avg_block_time = time_diff / (len(recent_blocks) - 1)
-    difficulty_prefix = blockchain.get_difficulty_prefix()
-    difficulty = 16**len(difficulty_prefix)
-    hash_rate = difficulty / avg_block_time if avg_block_time > 0 else 0
-    return jsonify({
-        'chain_length': chain_length,
-        'pending_transactions': pending_transactions,
-        'last_block_hash': last_block['hash'] if last_block else '0',
-        'average_block_time': avg_block_time,
-        'hash_rate': int(hash_rate)
-    }), 200
+    try:
+        chain_length = blocks_col.count_documents({})
+        pending_transactions = mempool_col.count_documents({})
+        last_block = blockchain.get_previous_block()
+        avg_block_time = 0
+        hash_rate = 0
+
+        if last_block and chain_length > 10:
+            recent_blocks = list(blocks_col.find({'index': {'$gt': chain_length - 10}}).sort("index", 1))
+            if len(recent_blocks) > 1:
+                time_diff = recent_blocks[-1]['timestamp'] - recent_blocks[0]['timestamp']
+                avg_block_time = time_diff / (len(recent_blocks) - 1)
+                difficulty_prefix = blockchain.get_difficulty_prefix()
+                difficulty = 16**len(difficulty_prefix)
+                hash_rate = difficulty / avg_block_time if avg_block_time > 0 else 0
+        
+        return jsonify({
+            'chain_length': chain_length,
+            'pending_transactions': pending_transactions,
+            'last_block_hash': last_block['hash'] if last_block else '0',
+            'average_block_time': avg_block_time,
+            'hash_rate': int(hash_rate)
+        }), 200
+    except Exception as e:
+        logging.error(f"Error in /status endpoint: {e}")
+        return jsonify({"error": "An internal error occurred in the status endpoint."}), 500
+
+# --- NEW: /get_chain endpoint ---
+@app.route('/get_chain', methods=['GET'])
+def get_chain():
+    try:
+        chain = list(blocks_col.find(sort=[("index", DESCENDING)]))
+        return jsonify({'chain': prepare_json_response(chain), 'length': len(chain)}), 200
+    except Exception as e:
+        logging.error(f"Error in /get_chain endpoint: {e}")
+        return jsonify({"error": "Could not retrieve chain data."}), 500
+
+# --- NEW: /get_block/<identifier> endpoint ---
+@app.route('/get_block/<identifier>', methods=['GET'])
+def get_block(identifier):
+    try:
+        # Try to convert to int for block index search
+        try:
+            block_index = int(identifier)
+            block = blocks_col.find_one({'index': block_index})
+        except ValueError:
+            # If it's not an int, assume it's a block hash
+            block = blocks_col.find_one({'hash': identifier})
+        
+        if block:
+            return jsonify(prepare_json_response(block)), 200
+        else:
+            return jsonify({'error': 'Block not found'}), 404
+    except Exception as e:
+        logging.error(f"Error in /get_block endpoint: {e}")
+        return jsonify({"error": "An internal error occurred."}), 500
 
 @app.route('/mine_block', methods=['GET'])
 def mine_block_endpoint():
@@ -334,11 +283,13 @@ def mine_block_endpoint():
 
 @app.route('/address/<address>', methods=['GET'])
 def get_address_details(address):
+    # This endpoint is already robust
     state = blockchain.get_account_state(address)
     pipeline = [{"$unwind": "$transactions"},{"$match": {"$or": [{"transactions.sender": address}, {"transactions.recipient": address}]}}, {"$replaceRoot": {"newRoot": {"$mergeObjects": ["$transactions", {"block_index": "$index"}]}}}]
     transactions = list(blocks_col.aggregate(pipeline))
     return jsonify({'address': address,'balance': state['balance'],'nonce': state['nonce'],'transactions': prepare_json_response(transactions)}), 200
 
+# ... (The rest of your endpoints can stay the same, I've just included the ones we are fixing) ...
 @app.route('/transaction/<tx_id>', methods=['GET'])
 def get_transaction(tx_id):
     block = blocks_col.find_one({"transactions.transaction_id": tx_id})
@@ -348,7 +299,6 @@ def get_transaction(tx_id):
     tx_mempool = mempool_col.find_one({"transaction_id": tx_id}, {'_id': 0})
     if tx_mempool: return jsonify(prepare_json_response({**tx_mempool, "block_index": "Pending"})), 200
     return jsonify({"error": "Transaction not found"}), 404
-
 @app.route('/new_transaction', methods=['POST'])
 def new_transaction_endpoint():
     values = request.get_json()
@@ -357,7 +307,10 @@ def new_transaction_endpoint():
     result = blockchain.add_transaction_to_mempool(**values)
     if 'error' in result: return jsonify(result), 400
     return jsonify({'message': 'Transaction added to mempool', 'transaction_id': result['transaction_id']}), 201
-
+@app.route('/get_mempool', methods=['GET'])
+def get_mempool():
+    mempool = list(mempool_col.find({}, {'_id': 0}))
+    return jsonify({"mempool": mempool, "count": len(mempool)}), 200
 @app.route('/faucet/drip', methods=['POST'])
 def faucet_drip_endpoint():
     if not faucet_private_key: return jsonify({'error': 'Faucet is not configured.'}), 501
@@ -378,27 +331,6 @@ def faucet_drip_endpoint():
     faucet_requests_col.insert_one({"ip_address": client_ip, "address": recipient, "timestamp": datetime.datetime.now(datetime.timezone.utc)})
     return jsonify({'message': f'Sent {FAUCET_DRIP_AMOUNT} $BUNK.', 'transaction_id': result['transaction_id']}), 201
 
-@app.route('/get_mempool', methods=['GET'])
-def get_mempool():
-    mempool = list(mempool_col.find({}, {'_id': 0}))
-    return jsonify({"mempool": mempool, "count": len(mempool)}), 200
-    
-# --- P2P Networking Endpoints ---
-@app.route('/nodes/register', methods=['POST'])
-@p2p_required
-def register_nodes():
-    nodes = request.get_json().get('nodes')
-    if nodes is None: return "Error: Please supply a valid list of nodes", 400
-    for node in nodes: blockchain.add_node(node)
-    return jsonify({'message': 'New nodes have been added', 'total_nodes': list(blockchain.nodes)}), 201
-
-@app.route('/nodes/resolve', methods=['GET'])
-@p2p_required
-def consensus():
-    replaced = blockchain.resolve_conflicts()
-    message = 'Our chain was replaced' if replaced else 'Our chain is authoritative'
-    return jsonify({'message': message}), 200
-    
 # =============================================================================
 # Main Execution
 # =============================================================================
