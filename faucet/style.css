@@ -1,40 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
+
 body {
-    background-color: #030712; /* A deeper gray */
-    background-image: radial-gradient(circle at 1px 1px, #1f2937 1px, transparent 0);
-    background-size: 20px 20px;
+    background-color: #030712;
+    font-family: 'Inter', sans-serif;
+    position: relative;
 }
 
+/* --- Animated Aurora Background --- */
+.background-aurora {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+    filter: blur(100px) saturate(150%);
+}
+.blob {
+    position: absolute;
+    border-radius: 50%;
+    mix-blend-mode: screen;
+    animation: moveBlob 20s infinite alternate;
+}
+.blob.one { width: 400px; height: 400px; top: -50px; left: -100px; background: rgba(79, 70, 229, 0.4); }
+.blob.two { width: 300px; height: 300px; bottom: -50px; right: -50px; background: rgba(20, 184, 166, 0.4); animation-duration: 25s; animation-direction: alternate-reverse; }
+.blob.three { width: 250px; height: 250px; top: 50%; left: 40%; background: rgba(168, 85, 247, 0.3); animation-duration: 15s; }
+
+@keyframes moveBlob {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(100px, 50px) scale(1.2); }
+}
+
+/* --- Improved Glassmorphism Card --- */
 .card {
-    background-color: rgba(17, 24, 39, 0.8); /* bg-gray-900 with opacity */
-    border: 1px solid #1f2937;
-    border-radius: 1rem;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    background: rgba(17, 24, 39, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.5rem;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
-/* Toast Notification Styling */
-.toast {
-    padding: 1rem 1.5rem;
+/* --- Icon Glow Animation --- */
+.animate-glow {
+    animation: glow 4s infinite ease-in-out;
+}
+@keyframes glow {
+    0%, 100% { filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.5)); }
+    50% { filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.8)); }
+}
+
+
+/* --- SVG Cooldown Timer --- */
+#cooldown-progress {
+    transition: stroke-dashoffset 1s linear;
+}
+
+/* --- Input Field Validation Styles --- */
+#addressInput.valid { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.5); }
+#addressInput.valid + i { color: #10b981; }
+#addressInput.invalid { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5); }
+#addressInput.invalid + i { color: #ef4444; }
+
+/* --- Toast Notification Styling --- */
+.toast { padding: 1rem; border-radius: 0.5rem; color: white; font-weight: 600; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transform: translateX(120%); opacity: 0; transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+.toast.show { transform: translateX(0); opacity: 1; }
+.toast.success { background: linear-gradient(to right, #10b981, #059669); }
+.toast.error { background: linear-gradient(to right, #ef4444, #dc2626); }
+.toast a { color: white; font-weight: bold; text-decoration: underline; margin-left: 0.5rem; }
+
+/* --- Live Activity Feed --- */
+#activity-feed li {
+    background-color: rgba(31, 41, 55, 0.5);
+    padding: 0.5rem 0.75rem;
     border-radius: 0.5rem;
+    font-size: 0.875rem;
+    animation: slideIn 0.5s ease forwards;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* --- Fixes for text color --- */
     color: white;
-    font-weight: 600;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transform: translateX(120%);
-    opacity: 0;
-    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    font-weight: 500;
 }
-
-.toast.show {
-    transform: translateX(0);
-    opacity: 1;
+#activity-feed li strong {
+    font-weight: 700;
+    color: #e5e7eb; /* A slightly brighter off-white for the address */
 }
-
-.toast.success {
-    background-color: #10b981; /* Green */
-    border-left: 4px solid #059669;
-}
-
-.toast.error {
-    background-color: #ef4444; /* Red */
-    border-left: 4px solid #dc2626;
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
 }
