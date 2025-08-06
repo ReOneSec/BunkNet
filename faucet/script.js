@@ -35,17 +35,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LIVE ACTIVITY FEED (SIMULATED) ---
     function startSimulatedActivity() {
-        // In a real app, this would be a WebSocket or SSE connection
         setInterval(() => {
             const mockAddress = `0x${[...Array(40)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
             addActivityItem(mockAddress, 10);
         }, 4000);
     }
-    function addActivityItem(address, amount) { /* ... (no changes) ... */ }
+
+    function addActivityItem(address, amount) {
+        const item = document.createElement('li');
+        item.innerHTML = `<i class="fa-solid fa-check-circle text-green-400 mr-2"></i><strong>${address.substring(0, 8)}...${address.substring(34)}</strong> received ${amount} $BUNK`;
+        activityFeed.prepend(item);
+        if (activityFeed.children.length > 4) {
+            activityFeed.lastChild.remove();
+        }
+    }
 
     // --- ADDRESS VALIDATION ---
-    function validateAddress(address) { return /^0x[a-fA-F0-9]{40}$/.test(address); }
-    function validateAddressInput() { /* ... (no changes) ... */ }
+    function validateAddress(address) {
+        return /^0x[a-fA-F0-9]{40}$/.test(address);
+    }
+
+    function validateAddressInput() {
+        const address = addressInput.value.trim();
+        // Reset styles if input is empty
+        if (!address) {
+            addressInput.className = 'w-full p-3 pl-12 bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 transition text-white font-bold';
+            return;
+        }
+        // Apply valid/invalid class based on validation
+        if (validateAddress(address)) {
+            addressInput.classList.add('valid');
+            addressInput.classList.remove('invalid');
+        } else {
+            addressInput.classList.add('invalid');
+            addressInput.classList.remove('valid');
+        }
+    }
 
     // --- COOLDOWN LOGIC ---
     function checkCooldown() {
@@ -62,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // UPDATED: Changed timer format to HH:MM:SS
     function startCountdown(endTime) {
         setLoading(true, true);
         faucetIcon.classList.add('hidden');
@@ -89,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
 
-    // UPDATED: Ensures success panel is hidden on reset
     function resetUI() {
         setLoading(false);
         faucetIcon.classList.remove('hidden');
@@ -102,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- API & UI LOGIC ---
-    // UPDATED: Now shows success panel before starting cooldown
     async function handleDripRequest() {
         const address = addressInput.value.trim();
         if (!validateAddress(address)) {
@@ -134,9 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // NEW: Function to handle the success UI state
     function showSuccessState(txId) {
-        setLoading(false); // Re-enable button visually but panel is hidden
+        setLoading(false);
         actionPanel.classList.add('hidden');
         
         const url = `${EXPLORER_URL}/#/transaction/${txId}`;
@@ -146,9 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         confetti({ particleCount: 200, spread: 120, origin: { y: 0.6 } });
         
-        // After 15 seconds, transition to the long-term cooldown timer view
         setTimeout(() => {
-            // Check if user is still on the success screen before switching
             if (!successPanel.classList.contains('hidden')) {
                 successPanel.classList.add('hidden');
                 checkCooldown();
@@ -156,11 +175,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 15000);
     }
 
-    function setLoading(isLoading, isCooldown = false) { /* ... (no changes) ... */ }
-    function showToast(message, type = 'success') { /* ... (no changes, only used for errors now) ... */ }
-    function validateAddressInput() { /* ... (no changes) ... */ }
-    function addActivityItem(address, amount) { /* ... (no changes) ... */ }
+    function setLoading(isLoading, isCooldown = false) {
+        dripButton.disabled = isLoading;
+        buttonSpinner.classList.toggle('hidden', !isLoading || isCooldown);
+        buttonText.textContent = isLoading ? (isCooldown ? 'On Cooldown' : 'Requesting...') : 'Request Tokens';
+    }
 
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
 
+        setTimeout(() => toast.classList.add('show'), 100);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.addEventListener('transitionend', () => toast.remove());
+        }, 5000);
+    }
+    
     init();
 });
