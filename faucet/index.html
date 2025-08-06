@@ -9,41 +9,72 @@
     <link rel="stylesheet" href="style.css" />
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
-<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+<body class="flex items-center justify-center min-h-screen p-4 overflow-hidden">
+
+    <div class="background-aurora">
+        <div class="blob one"></div>
+        <div class="blob two"></div>
+        <div class="blob three"></div>
+    </div>
 
     <div id="toastContainer" class="fixed top-5 right-5 z-50 space-y-3"></div>
 
-    <div class="w-full max-w-lg mx-auto text-center">
+    <div class="w-full max-w-lg mx-auto text-center relative z-10">
         <div class="card p-8 md:p-12">
             <header class="mb-8">
-                <i class="fa-solid fa-faucet-drip text-cyan-400 text-6xl mb-4 animate-pulse"></i>
+                <div id="icon-container" class="relative w-32 h-32 mx-auto mb-4 flex items-center justify-center">
+                    <svg id="cooldown-svg" class="absolute w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                        <circle class="text-gray-700/50" stroke-width="8" stroke="currentColor" fill="transparent" r="52" cx="60" cy="60" />
+                        <circle id="cooldown-progress" class="stroke-gradient" stroke-width="8" stroke-dasharray="326.7" stroke-dashoffset="326.7" stroke-linecap="round" stroke="url(#gradient)" fill="transparent" r="52" cx="60" cy="60" />
+                        <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#22d3ee" />
+                                <stop offset="100%" stop-color="#a855f7" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <i id="faucet-icon" class="fa-solid fa-faucet-drip text-cyan-400 text-6xl transition-all duration-500 animate-glow"></i>
+                    <div id="cooldown-text" class="absolute font-mono text-2xl font-bold text-white"></div>
+                </div>
+                
                 <h1 class="text-4xl md:text-5xl font-bold text-white">BunkNet Faucet</h1>
-                <p class="text-gray-400 mt-2">The fastest way to get testnet tokens for the BunkNet ecosystem.</p>
+                <p id="subtitle" class="text-gray-400 mt-2">Get testnet tokens instantly for the BunkNet ecosystem.</p>
             </header>
 
             <main>
-                <div class="mb-6 bg-gray-800/50 p-4 rounded-lg">
-                    <p class="text-lg">Enter your address to receive <strong class="text-cyan-400">10 $BUNK</strong>.</p>
-                    <p class="text-sm text-gray-500">(One request per address every 24 hours)</p>
-                </div>
-                
-                <div class="space-y-4">
-                    <div class="relative">
-                        <i class="fa-solid fa-wallet absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                        <input id="addressInput" type="text" placeholder="Enter your BunkNet address" class="w-full p-3 pl-12 bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" />
+                <div id="action-panel">
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <i class="fa-solid fa-wallet absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 transition-colors"></i>
+                            <input id="addressInput" type="text" placeholder="Enter your 0x... address" class="w-full p-3 pl-12 bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 transition text-white font-bold" />
+                        </div>
+                        <button id="dripButton" class="w-full bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-cyan-600 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100">
+                            <span id="buttonText">Request Tokens</span>
+                            <i id="buttonSpinner" class="fa-solid fa-spinner fa-spin hidden"></i>
+                        </button>
                     </div>
-                    <button id="dripButton" class="w-full bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100">
-                        <span id="buttonText">Request Tokens</span>
-                        <i id="buttonSpinner" class="fa-solid fa-spinner fa-spin hidden"></i>
-                    </button>
                 </div>
 
-                <div id="cooldownTimer" class="mt-6 text-lg font-semibold text-yellow-400 hidden"></div>
+                <div id="success-panel" class="hidden text-center space-y-4">
+                    <i class="fa-solid fa-circle-check text-green-400 text-5xl"></i>
+                    <div>
+                        <p class="text-lg font-semibold text-white">Tokens Sent!</p>
+                        <p class="text-gray-400 text-sm">Your transaction has been broadcasted to the network.</p>
+                    </div>
+                    <div class="p-3 bg-gray-800/70 border border-gray-700 rounded-lg break-all">
+                        <a id="tx-link" href="#" target="_blank" class="text-cyan-400 font-mono text-xs hover:underline"></a>
+                    </div>
+                </div>
+                
+                <div id="activity-feed-container" class="mt-8 text-left">
+                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Live Activity</h3>
+                    <ul id="activity-feed" class="space-y-2 h-28 overflow-hidden relative">
+                        </ul>
+                </div>
             </main>
         </div>
         <footer class="text-center mt-8 text-gray-500 text-sm">
-            <p>&copy; 2025 BunkNet. All rights reserved.</p>
-          <p>Visit BUNKNET.ONLINE For More Information</p>
+            <p>Visit <a href="https://bunknet.online" target="_blank" class="text-cyan-400 hover:underline">BUNKNET.ONLINE</a> For More Information</p>
         </footer>
     </div>
 
