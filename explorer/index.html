@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,34 +8,69 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="style.css" />
 </head>
-<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+<body class="font-sans">
+
+    <div class="background-gradient"></div>
 
     <div id="toast-container" class="fixed top-5 right-5 z-50"></div>
 
-    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         
-        <header class="mb-10">
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-6">
-                <a href="#" class="text-4xl font-bold text-cyan-400 flex items-center gap-3">
-                    <i class="fa-solid fa-cubes"></i>
+        <header class="content-card sticky top-4 z-40 mb-4 p-4 rounded-full shadow-lg">
+            <div class="flex items-center justify-between">
+                <a href="#" class="text-xl font-black flex items-center gap-3 text-text-primary">
+                    <i class="fa-solid fa-cubes-stacked"></i>
                     <span>BunkNet Explorer</span>
                 </a>
-                <div class="relative w-full sm:max-w-md">
-                    <input id="searchInput" type="text" placeholder="Search by Address, Tx Hash, or Block Hash..." class="w-full p-3 pl-10 bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" />
-                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                </div>
+                <button id="nav-toggle" class="text-text-primary focus:outline-none w-10 h-10 flex items-center justify-center">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
             </div>
         </header>
+
+        <div id="mobile-menu" class="hidden fixed top-24 right-4 z-50 w-64">
+            <div class="content-card p-4 rounded-2xl shadow-xl">
+                <div class="flex flex-col items-center gap-2">
+                    <a href="https://faucet.bunknet.online" target="_blank" rel="noopener noreferrer" class="hash-link w-full text-center p-3 rounded-lg hover:bg-white/10 transition-colors duration-200">Faucet</a>
+                    <a href="https://t.me/BUNKPay_Bot" target="_blank" rel="noopener noreferrer" class="hash-link w-full text-center p-3 rounded-lg hover:bg-white/10 transition-colors duration-200">Telegram Wallet</a>
+                    <a href="https://wallet.bunknet.online" target="_blank" rel="noopener noreferrer" class="hash-link w-full text-center p-3 rounded-lg hover:bg-white/10 transition-colors duration-200">Extension Wallet</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="relative w-full sm:max-w-md mx-auto mb-6">
+            <div class="content-card flex items-center p-1 rounded-full">
+                <i class="fa-solid fa-search pl-4 text-text-secondary"></i>
+                <input id="searchInput" type="text" placeholder="Search by Address, Block, or Tx..." class="w-full p-2 pl-3 bg-transparent border-none rounded-full text-text-primary focus:outline-none" />
+            </div>
+        </div>
+
+
+        <div id="mobile-menu" class="hidden fixed top-24 right-4 z-50 w-64">
+            <div class="content-card p-4 rounded-2xl shadow-xl">
+                <div class="flex flex-col items-center gap-2">
+                    <a href="https://faucet.bunknet.online" target="_blank" rel="noopener noreferrer" class="hash-link w-full text-center p-3 rounded-lg hover:bg-white/10 transition-colors duration-200">Faucet</a>
+                    <a href="https://t.me/BUNKPay_Bot" target="_blank" rel="noopener noreferrer" class="hash-link w-full text-center p-3 rounded-lg hover:bg-white/10 transition-colors duration-200">Telegram Wallet</a>
+                    <a href="https://wallet.bunknet.online" target="_blank" rel="noopener noreferrer" class="hash-link w-full text-center p-3 rounded-lg hover:bg-white/10 transition-colors duration-200">Extension Wallet</a>
+                </div>
+            </div>
+        </div>
 
         <main id="app-root">
             </main>
 
-        <footer class="text-center mt-12 text-gray-500 text-sm">
-            <p>BunkNet Explorer &copy; 2025. Powered by the BunkNet API.</p>
+        <footer class="text-center mt-12 text-text-secondary text-sm border-t border-border-color pt-6">
+            <div class="flex justify-center items-center gap-6 mb-4">
+                <a href="https://faucet.bunknet.online" target="_blank" rel="noopener noreferrer" class="hash-link">Faucet</a>
+                <a href="https://t.me/BUNKPay_Bot" target="_blank" rel="noopener noreferrer" class="hash-link">Telegram Wallet</a>
+                <a href="https://wallet.bunknet.online" target="_blank" rel="noopener noreferrer" class="hash-link">Extension Wallet</a>
+            </div>
+            <p>Crafted With ❤️ By Global BunkNet Devs</p>
         </footer>
 
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
