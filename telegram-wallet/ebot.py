@@ -56,7 +56,7 @@ def hash_pin(pin: str, user_id: int) -> str:
     salt = str(user_id).encode()
     return hashlib.pbkdf2_hmac('sha256', pin.encode(), salt, 100000, 64).hex()
 
-# --- Wallet & Crypto Helpers (UPDATED) ---
+# --- Wallet & Crypto Helpers ---
 def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
     """Derives a private key using the standard BIP-44 path."""
     seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
@@ -66,7 +66,6 @@ def get_keys_from_mnemonic(mnemonic: str) -> SigningKey:
     return SigningKey.from_string(private_key_bytes, curve=SECP256k1)
 
 def public_key_to_address(verifying_key: VerifyingKey) -> str:
-    """Converts an ECDSA public key to a standard 0x-prefixed Ethereum address."""
     public_key_bytes = verifying_key.to_string("uncompressed")[1:]
     k = keccak.new(digest_bits=256)
     k.update(public_key_bytes)
@@ -114,6 +113,7 @@ def get_or_create_wallet(user_id: int, username: str) -> dict:
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("💰 Balance", callback_data="balance"), InlineKeyboardButton("📜 History", callback_data="history")], [InlineKeyboardButton("⬆️ Send", callback_data="send"), InlineKeyboardButton("⬇️ Receive", callback_data="receive")], [InlineKeyboardButton("⚙️ Settings", callback_data="settings")]]
     return InlineKeyboardMarkup(keyboard)
+
 def get_settings_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("🔑 Set/Change PIN", callback_data="set_pin")], [InlineKeyboardButton("📄 View Seed Phrase", callback_data="backup")], [InlineKeyboardButton("« Back to Main Menu", callback_data="main_menu")]]
     return InlineKeyboardMarkup(keyboard)
@@ -124,15 +124,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     get_or_create_wallet(user.id, user.username)
     await update.message.reply_text(f"👋 Welcome to the BunkNet Wallet, {user.first_name}!\n\nUse the buttons below or type /help.", reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = r"""*BunkNet Wallet Bot Help*
-Here are the commands:
 `/start` \- Shows the main menu\.
 `/address` \- Shows your wallet address\.
 `/help` \- Shows this message\.
 `/cancel` \- Cancels any operation\.
 """
     await update.message.reply_text(help_text, parse_mode='MarkdownV2')
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text("Action cancelled.", reply_markup=get_main_menu_keyboard())
@@ -140,8 +141,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # --- Simple Button Actions ---
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
-    await query.message.delete()
+    query = update.callback_query; await query.answer(); await query.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
     try:
         response = requests.get(f"{BFF_API_URL}/address/{user_wallet['address']}")
@@ -150,15 +150,8 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         balance_str = escape_markdown(f"{balance_val:.4f}")
         message = f"Your current balance is:\n\n`{balance_str}` *$BUNK*"
     except requests.exceptions.RequestException:
-        # THE FIX: We now escape the static error message.
         message = escape_markdown("Could not connect to the BunkNet network.")
-        
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text=message, 
-        parse_mode='MarkdownV2', 
-        reply_markup=get_main_menu_keyboard()
-    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
 
 async def receive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -175,12 +168,9 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer(); await query.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
     address = user_wallet['address']
-    
     try:
         response = requests.get(f"{BFF_API_URL}/address/{address}"); response.raise_for_status()
-        data = response.json()
-        transactions = data.get('transactions', [])
-
+        transactions = response.json().get('transactions', [])
         if not transactions:
             message = escape_markdown("You have no transactions yet.")
         else:
@@ -190,35 +180,18 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 direction_text = "Sent" if tx['sender'] == address else "Received"
                 amount_str = escape_markdown(f"{tx['amount']:.4f}")
                 other_party_addr = tx['recipient'] if direction_text == "Sent" else tx['sender']
-                
-                if other_party_addr == '0':
-                    display_address = escape_markdown("Network Reward")
-                else:
-                    display_address = escape_markdown(f"{other_party_addr[:6]}...{other_party_addr[-6:]}")
-                
+                display_address = escape_markdown("Network Reward") if other_party_addr == '0' else escape_markdown(f"{other_party_addr[:6]}...{other_party_addr[-6:]}")
                 tx_id = tx.get('transaction_id', 'N/A')
                 link_text = escape_markdown(f"{tx_id[:6]}...{tx_id[-6:]}")
-                explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}" # Consistent explorer link
-                
-                tx_info = (f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n"
-                           f"*To/From:* `{display_address}`\n"
-                           f"*Hash:* [{link_text}]({explorer_url})")
+                explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+                tx_info = (f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n*To/From:* `{display_address}`\n*Hash:* [{link_text}]({explorer_url})")
                 message_parts.append(tx_info)
             message = "\n\n".join(message_parts)
-            
     except requests.exceptions.RequestException as e:
         logging.error(f"Could not fetch transaction history: {e}")
         message = escape_markdown("Could not fetch transaction history from the network.")
-
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text=message, 
-        parse_mode='MarkdownV2', 
-        reply_markup=get_main_menu_keyboard(), 
-        disable_web_page_preview=True
-    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard(), disable_web_page_preview=True)
     return MAIN_MENU
-    
     
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
@@ -230,7 +203,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await query.edit_message_text("Main Menu:", reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
 
-# --- PIN, SEND, BACKUP FLOWS (ALL FUNCTIONS NOW INCLUDED) ---
+# --- PIN, SEND, BACKUP FLOWS (UPDATED) ---
 async def protected_action_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     user_wallet = get_or_create_wallet(query.from_user.id, "")
@@ -249,9 +222,11 @@ async def check_pin_and_proceed(update: Update, context: ContextTypes.DEFAULT_TY
         return MAIN_MENU
     next_action = context.user_data.get('next_action')
     if next_action == 'backup':
-        await perform_backup(update, context); return MAIN_MENU
+        await perform_backup(update, context)
+        return MAIN_MENU
     elif next_action == 'send':
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="PIN verified. Who is the recipient (enter 0x address)?"); return GET_RECIPIENT
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="PIN verified. Who is the recipient (enter 0x address)?")
+        return GET_RECIPIENT
     return MAIN_MENU
 
 async def set_pin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -296,77 +271,61 @@ async def get_fee(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['fee'] = float(update.message.text)
         recipient, amount, fee = context.user_data['recipient'], context.user_data['amount'], context.user_data['fee']
-        text = f"*To:* `{recipient}`\n*Amount:* `{amount:.4f} $BUNK`\n*Fee:* `{fee:.4f} $BUNK`\n*Total:* `{(amount+fee):.4f} $BUNK`"
+        text = f"*To:* `{escape_markdown(recipient)}`\n*Amount:* `{amount:.4f} $BUNK`\n*Fee:* `{fee:.4f} $BUNK`\n*Total:* `{(amount+fee):.4f} $BUNK`"
         keyboard = [[InlineKeyboardButton("✅ Confirm", callback_data="confirm_send"), InlineKeyboardButton("❌ Cancel", callback_data="cancel_send")]]
-        await update.message.reply_text(text=f"Please confirm:\n\n{escape_markdown(text)}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='MarkdownV2')
+        await update.message.reply_text(text=f"Please confirm:\n\n{text}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='MarkdownV2')
         return CONFIRM_SEND
     except ValueError: await update.message.reply_text("Invalid fee. Cancelling."); return ConversationHandler.END
 
 async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-
+    query = update.callback_query; await query.answer()
     if query.data == "confirm_send":
         await query.edit_message_text(text="Broadcasting transaction to the network...")
-        
-        # Get all necessary data
         user_wallet = get_or_create_wallet(update.effective_user.id, "")
         mnemonic = decrypt_mnemonic(user_wallet['encrypted_mnemonic'], update.effective_user.id)
         private_key = get_keys_from_mnemonic(mnemonic)
         verifying_key = private_key.get_verifying_key()
         sender_address = public_key_to_address(verifying_key)
         public_key = binascii.hexlify(verifying_key.to_string()).decode()
+        recipient, amount, fee = context.user_data['recipient'], context.user_data['amount'], context.user_data['fee']
         
-        recipient = context.user_data['recipient']
-        amount = context.user_data['amount']
-        fee = context.user_data['fee']
-        
-        # Build transaction payload
-        tx_data = {'sender': sender_address, 'recipient': recipient, 'amount': amount, 'fee': fee}
+        # --- CRITICAL FIX: Get the latest nonce from the API ---
+        try:
+            addr_info = requests.get(f"{BFF_API_URL}/address/{sender_address}")
+            addr_info.raise_for_status()
+            nonce = addr_info.json().get('nonce', 0)
+        except requests.exceptions.RequestException:
+            await query.edit_message_text(text="❌ Error: Could not fetch account details to create transaction.", reply_markup=get_main_menu_keyboard())
+            return MAIN_MENU
+            
+        # Build transaction payload with the correct nonce
+        tx_data = {'sender': sender_address, 'recipient': recipient, 'amount': amount, 'fee': fee, 'nonce': nonce}
         tx_hash_bytes = hashlib.sha256(json.dumps(tx_data, sort_keys=True).encode()).digest()
         signature = binascii.hexlify(private_key.sign(tx_hash_bytes)).decode()
         payload = {**tx_data, 'public_key': public_key, 'signature': signature}
         
         try:
-            response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload)
-            response.raise_for_status()
+            response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload); response.raise_for_status()
             response_data = response.json()
-            
-            # Extract the transaction ID from the API response
             tx_id = response_data.get('transaction_id')
-
             if tx_id:
-                # Create the new, detailed success message
                 amount_str = escape_markdown(f"{amount:.4f}")
                 recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
                 explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
-                
-                result_message = (
-                    f"✅ *Transaction Successful*\n\n"
-                    f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
-                    f"*Hash:* `{escape_markdown(tx_id)}`\n\n"
-                    f"[View on BunkScan Explorer]({explorer_url})"
-                )
+                result_message = (f"✅ *Transaction Successful*\n\n"
+                                  f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
+                                  f"*Hash:* `{escape_markdown(tx_id)}`\n\n"
+                                  f"[View on BunkScan Explorer]({explorer_url})")
             else:
-                # Fallback message if the hash isn't in the response for some reason
-                result_message = escape_markdown("✅ Transaction sent successfully, but could not retrieve transaction hash.")
-
+                result_message = escape_markdown("✅ Transaction sent successfully, but could not retrieve hash.")
         except requests.exceptions.RequestException as e:
             error_msg = "Could not send transaction."
-            try:
-                error_msg = e.response.json().get('error', error_msg)
+            try: error_msg = e.response.json().get('error', error_msg)
             except: pass
             result_message = f"❌ *Transaction Failed*\n\n`{escape_markdown(error_msg)}`"
-
-        await query.edit_message_text(
-            text=result_message,
-            reply_markup=get_main_menu_keyboard(),
-            parse_mode='MarkdownV2',
-            disable_web_page_preview=True
-        )
-    else:  # User clicked cancel
+        await query.edit_message_text(text=result_message, reply_markup=get_main_menu_keyboard(), parse_mode='MarkdownV2', disable_web_page_preview=True)
+    else:
         await query.edit_message_text(text="Transaction cancelled.", reply_markup=get_main_menu_keyboard())
-    
     context.user_data.clear()
     return MAIN_MENU
 
@@ -374,24 +333,15 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
 # MAIN APPLICATION LOOP
 # =============================================================================
 def main() -> None:
-    """The main function to run the bot."""
-    # This block is indented once (e.g., 4 spaces)
     if not TELEGRAM_BOT_TOKEN or not BOT_SECRET_KEY:
-        # This block is indented twice (e.g., 8 spaces)
-        logging.error("Bot tokens and secret key must be set in the .env file.")
-        return
-
-    # These lines are all at the same indentation level (one indent)
+        logging.error("Bot tokens and secret key must be set in the .env file."); return
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
-
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
             MAIN_MENU: [
-                CallbackQueryHandler(balance, pattern='^balance$'),
-                CallbackQueryHandler(history, pattern='^history$'),
-                CallbackQueryHandler(receive, pattern='^receive$'),
-                CallbackQueryHandler(settings, pattern='^settings$'),
+                CallbackQueryHandler(balance, pattern='^balance$'), CallbackQueryHandler(history, pattern='^history$'),
+                CallbackQueryHandler(receive, pattern='^receive$'), CallbackQueryHandler(settings, pattern='^settings$'),
                 CallbackQueryHandler(protected_action_start, pattern='^(send|backup)$'),
             ],
             SETTINGS_MENU: [
@@ -410,13 +360,11 @@ def main() -> None:
         fallbacks=[CommandHandler('start', start), CommandHandler('help', help_command), CommandHandler('cancel', cancel)],
         per_user=True, per_chat=True
     )
-
     application.add_handler(CommandHandler("address", receive))
     application.add_handler(conv_handler)
-    
     logging.info("Bot is starting...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-
 if __name__ == "__main__":
     main()
+    
