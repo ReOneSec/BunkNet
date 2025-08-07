@@ -1,5 +1,5 @@
 // --- CONFIGURATION ---
-const API_BASE_URL = "/api";
+const API_BASE_URL = "https://explorer.bunknet.online/api";
 const POLLING_RATE_MS = 10000;
 
 // --- DOM ELEMENTS & STATE ---
@@ -235,3 +235,4 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+    
