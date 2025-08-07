@@ -133,9 +133,7 @@ class Blockchain:
         if not is_valid:
             return {'error': 'Invalid signature.'}
 
-        # --- THE FINAL FIX IS HERE ---
         # 3. The only check that matters: Does the sender's address match the address from the signature?
-        # We no longer need to check the public_key from the payload.
         derived_address = public_key_to_address(derived_pk)
         if sender.lower() != derived_address.lower():
             return {'error': 'Sender address does not match the signature.'}
@@ -149,10 +147,11 @@ class Blockchain:
         if mempool_col.find_one({'sender': sender, 'nonce': int(nonce)}):
             return {'error': 'Transaction with this nonce already in mempool.'}
 
-        # 5. All checks passed, add to mempool
-        full_tx = {**tx_data, 'transaction_id': str(uuid.uuid4()), 'type': 'transfer', 'timestamp': time.time()}
+        # 5. All checks passed, add to mempool WITH signature and public key for the explorer
+        full_tx = {**tx_data, 'transaction_id': str(uuid.uuid4()), 'type': 'transfer', 'timestamp': time.time(), 'signature': signature, 'public_key': public_key}
         mempool_col.insert_one(full_tx)
         return full_tx
+        
         
 
     @staticmethod
