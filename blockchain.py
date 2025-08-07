@@ -158,7 +158,8 @@ class Blockchain:
 
     def add_transaction_to_mempool(self, sender, recipient, amount, fee, nonce, signature, public_key):
         if not (sender.startswith('0x') and len(sender) == 42): return {'error': 'Invalid sender address format.'}
-        tx_data = {'sender': sender, 'recipient': recipient, 'amount': float(amount), 'fee': float(fee), 'nonce': int(nonce)}
+        # CORRECT FINAL CODE
+        tx_data = {'sender': sender, 'recipient': recipient, 'amount': amount, 'fee': fee, 'nonce': nonce}
         if not self.verify_signature(public_key, signature, tx_data): return {'error': 'Invalid signature.'}
         vk = ecdsa.VerifyingKey.from_string(bytes.fromhex(public_key), curve=ecdsa.SECP256k1)
         if sender != public_key_to_address(vk): return {'error': 'Sender address does not match public key.'}
