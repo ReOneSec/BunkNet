@@ -10,7 +10,9 @@ import re
 import requests
 from dotenv import load_dotenv
 from mnemonic import Mnemonic
-from eth_keys.keys import PrivateKey, PublicKey # UPDATED to use eth_keys
+# --- CORRECTED IMPORTS ---
+from eth_keys.keys import PrivateKey
+from eth_keys.datatypes import PublicKey
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
@@ -43,7 +45,7 @@ mnemo = Mnemonic("english")
 # --- State Constants for Conversations ---
 MAIN_MENU, SETTINGS_MENU = range(2)
 NEW_PIN, CONFIRM_NEW_PIN = range(2, 4)
-VERIFY_PIN, GET_RECIPIENT, GET_AMOUNT, CONFIRM_SEND = range(4, 8) # Reduced one step
+VERIFY_PIN, GET_RECIPIENT, GET_AMOUNT, CONFIRM_SEND = range(4, 8)
 
 # --- Helper Functions ---
 def escape_markdown(text: str) -> str:
@@ -54,7 +56,7 @@ def hash_pin(pin: str, user_id: int) -> str:
     salt = str(user_id).encode()
     return hashlib.pbkdf2_hmac('sha256', pin.encode(), salt, 100000, 64).hex()
 
-# --- Wallet & Crypto Helpers (UPDATED) ---
+# --- Wallet & Crypto Helpers ---
 def get_private_key_from_mnemonic(mnemonic: str) -> PrivateKey:
     """Derives an eth_keys PrivateKey using the standard BIP-44 path."""
     seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
@@ -68,7 +70,6 @@ def public_key_to_address(public_key: PublicKey) -> str:
     return public_key.to_checksum_address()
 
 def encrypt_mnemonic(mnemonic: str, user_id: int) -> str:
-    # This encryption logic remains the same
     key_seed = f"{BOT_SECRET_KEY}{user_id}".encode()
     salt = get_random_bytes(16)
     key = hashlib.pbkdf2_hmac('sha256', key_seed, salt, 100000, 32)
@@ -77,7 +78,6 @@ def encrypt_mnemonic(mnemonic: str, user_id: int) -> str:
     return (salt + cipher.nonce + tag + encrypted).hex()
 
 def decrypt_mnemonic(encrypted_hex: str, user_id: int) -> str:
-    # This decryption logic remains the same
     encrypted_bytes = bytes.fromhex(encrypted_hex)
     salt, nonce, tag, ciphertext = encrypted_bytes[:16], encrypted_bytes[16:32], encrypted_bytes[32:48], encrypted_bytes[48:]
     key_seed = f"{BOT_SECRET_KEY}{user_id}".encode()
@@ -99,7 +99,7 @@ def get_or_create_wallet(user_id: int, username: str) -> dict:
     new_user = {
         "telegram_id": user_id,
         "username": username,
-        "public_key": public_key.to_bytes().hex(), # Store raw 64-byte public key hex
+        "public_key": public_key.to_bytes().hex(),
         "address": address,
         "encrypted_mnemonic": encrypted_mnemonic,
         "created_at": datetime.datetime.now(datetime.timezone.utc),
@@ -109,7 +109,7 @@ def get_or_create_wallet(user_id: int, username: str) -> dict:
     logging.info(f"Created a new wallet for user {username} ({user_id}) with address {address}")
     return new_user
 
-# --- UI Keyboards (No Changes) ---
+# --- UI Keyboards ---
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("💰 Balance", callback_data="balance"), InlineKeyboardButton("📜 History", callback_data="history")], [InlineKeyboardButton("⬆️ Send", callback_data="send"), InlineKeyboardButton("⬇️ Receive", callback_data="receive")], [InlineKeyboardButton("⚙️ Settings", callback_data="settings")]]
     return InlineKeyboardMarkup(keyboard)
@@ -118,7 +118,7 @@ def get_settings_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [[InlineKeyboardButton("🔑 Set/Change PIN", callback_data="set_pin")], [InlineKeyboardButton("📄 View Seed Phrase", callback_data="backup")], [InlineKeyboardButton("« Back to Main Menu", callback_data="main_menu")]]
     return InlineKeyboardMarkup(keyboard)
 
-# --- Top Level Command Handlers (No Changes) ---
+# --- Top Level Command Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     get_or_create_wallet(user.id, user.username)
@@ -269,16 +269,15 @@ async def get_recipient(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def get_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         amount_str = update.message.text
-        context.user_data['amount'] = float(amount_str) # Still need to parse for confirmation message
+        context.user_data['amount'] = float(amount_str)
         recipient, amount = context.user_data['recipient'], context.user_data['amount']
-        FEE = 0.01 # Use a constant fee
+        FEE = 0.01
         text = f"*To:* `{escape_markdown(recipient)}`\n*Amount:* `{amount:.4f} $BUNK`\n*Fee:* `{FEE:.4f} $BUNK`\n*Total:* `{(amount+FEE):.4f} $BUNK`"
         keyboard = [[InlineKeyboardButton("✅ Confirm", callback_data="confirm_send"), InlineKeyboardButton("❌ Cancel", callback_data="cancel_send")]]
         await update.message.reply_text(text=f"Please confirm:\n\n{text}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='MarkdownV2')
         return CONFIRM_SEND
     except ValueError: await update.message.reply_text("Invalid amount. Cancelling."); return ConversationHandler.END
 
-# --- TRANSACTION SIGNING AND SENDING (UPDATED) ---
 async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     if query.data != "confirm_send":
@@ -290,37 +289,27 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
     sender_address = user_wallet['address']
     recipient, amount = context.user_data['recipient'], context.user_data['amount']
-    FEE = "0.01" # Fee as a string
+    FEE = "0.01"
 
     try:
-        # 1. Get the latest nonce from the API
         addr_info = requests.get(f"{BFF_API_URL}/address/{sender_address}")
         addr_info.raise_for_status()
         nonce = addr_info.json().get('nonce', 0)
 
-        # 2. Decrypt mnemonic and get private key
         mnemonic = decrypt_mnemonic(user_wallet['encrypted_mnemonic'], update.effective_user.id)
         private_key = get_private_key_from_mnemonic(mnemonic)
         public_key = private_key.public_key
 
-        # 3. Construct the exact data object to be signed (with strings)
         tx_data = {'sender': sender_address, 'recipient': recipient, 'amount': str(amount), 'fee': FEE, 'nonce': nonce}
         tx_data_str = json.dumps(tx_data, sort_keys=True, separators=(',', ':')).encode()
         message_hash = hashlib.sha256(tx_data_str).digest()
 
-        # 4. Sign the hash using eth_keys
         signature_obj = private_key.sign_msg_hash(message_hash)
-        
-        # 5. Format the signature and public key exactly as the extension does
-        # 65-byte signature (r, s, v) without '0x' prefix
         signature_hex = signature_obj.to_bytes().hex()
-        # 64-byte public key (x, y) without '0x04' prefix
         public_key_hex = public_key.to_bytes().hex()
 
-        # 6. Build the final payload
         payload = {**tx_data, 'public_key': public_key_hex, 'signature': signature_hex}
         
-        # 7. Send to the network
         response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload)
         response.raise_for_status()
         response_data = response.json()
@@ -329,8 +318,9 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
         amount_str = escape_markdown(f"{amount:.4f}")
         recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
         explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+        # --- CORRECTED SYNTAX WARNING ---
         result_message = (f"✅ *Transaction Successful*\n\n"
-                          f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
+                          f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`.\n\n"
                           f"[View on Explorer]({explorer_url})")
 
     except requests.exceptions.RequestException as e:
@@ -383,4 +373,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-  
+    
