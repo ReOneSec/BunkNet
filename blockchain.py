@@ -111,13 +111,15 @@ class Blockchain:
     def process_transactions(self, transactions, session=None):
         for tx in transactions:
             sender, recipient, amount_str = tx['sender'], tx['recipient'], tx['amount']
-            amount = float(amount_str)
+            amount = float(amount_str) # Cast to float for calculations
             fee = float(tx.get('fee', '0'))
+            
             if sender != '0':
                 sender_state = self.get_account_state(sender, session=session)
                 new_sender_balance = sender_state['balance'] - amount - fee
                 new_sender_nonce = sender_state['nonce'] + 1
                 state_col.update_one({'_id': sender}, {'$set': {'balance': new_sender_balance, 'nonce': new_sender_nonce}}, upsert=True, session=session)
+            
             recipient_state = self.get_account_state(recipient, session=session)
             new_recipient_balance = recipient_state['balance'] + amount
             state_col.update_one({'_id': recipient}, {'$set': {'balance': new_recipient_balance}}, upsert=True, session=session)
@@ -145,22 +147,18 @@ class Blockchain:
 
     @staticmethod
     def verify_signature(signature_hex, transaction_data):
-        # This is the final, robust version of this function
         try:
-            # The client sends a pure 130-char hex string, no '0x'
+            # Client sends a pure 130-char hex string, no '0x'
             signature_bytes = bytes.fromhex(signature_hex)
 
             # --- THE FINAL FIX: NORMALIZE THE 'v' VALUE ---
-            # The last byte is the 'v' value.
-            v = signature_bytes[64]
-            # If v is 27 or 28 (legacy), normalize it to 0 or 1
-            if v >= 27:
+            v = signature_bytes[64] # The last byte is the 'v' value
+            if v >= 27: # If v is 27 or 28 (legacy), normalize it to 0 or 1
                 normalized_v = v - 27
                 # Reconstruct the signature with the normalized v
                 normalized_signature_bytes = signature_bytes[:64] + bytes([normalized_v])
                 sig = Signature(normalized_signature_bytes)
-            else:
-                # If v is already 0 or 1, use it as is
+            else: # If v is already 0 or 1, use it as is
                 sig = Signature(signature_bytes)
             
             tx_data_str = json.dumps(transaction_data, sort_keys=True, separators=(',', ':')).encode()
@@ -172,7 +170,6 @@ class Blockchain:
             logging.error(f"Signature verification failed: {e}")
             return False, None
 
-    # --- Other Blockchain methods (no changes required) ---
     def mine_block(self):
         prev_block = self.get_previous_block()
         if not prev_block:
@@ -196,7 +193,7 @@ class Blockchain:
                 except Exception as e:
                     logging.error(f"ATOMIC MINE FAILED: Transaction aborted due to an error: {e}")
                     return None
-
+    
     def adjust_difficulty(self, last_block, session=None):
         if last_block['index'] % DIFFICULTY_ADJUSTMENT_INTERVAL != 0 or last_block['index'] <= 1: return
         prev_adjustment_block = blocks_col.find_one({'index': last_block['index'] - DIFFICULTY_ADJUSTMENT_INTERVAL}, session=session)
@@ -237,7 +234,7 @@ class Blockchain:
         block_copy = block.copy(); block_copy.pop('hash', None)
         block_string = json.dumps(block_copy, sort_keys=True, default=str).encode()
         return hashlib.sha256(block_string).hexdigest()
-        
+
 # =============================================================================
 # Flask API Endpoints
 # =============================================================================
@@ -252,7 +249,6 @@ def new_transaction_endpoint():
     if 'error' in result: return jsonify(result), 400
     return jsonify({'message': 'Transaction added to mempool', 'transaction_id': result['transaction_id']}), 201
 
-# --- Other endpoints (no changes required) ---
 @app.route('/status', methods=['GET'])
 def get_status():
     try:
@@ -350,7 +346,7 @@ def admin_burn_tokens():
     mempool_col.insert_one(burn_tx)
     logging.info(f"ADMIN: Created burn transaction for {amount} $BUNK from {sender}")
     return jsonify({'message': f'Burn transaction for {amount} $BUNK from {sender} has been added to the mempool.'}), 201
-
+    
 # =============================================================================
 # Main Execution
 # =============================================================================
@@ -359,5 +355,5 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
     args = parser.parse_args()
     logging.info(f"Starting BunkNet node on port {args.port}")
-    app.run(host='0.z0.0.0', port=args.port, debug=False)
-                    
+    app.run(host='0.0.0.0', port=args.port, debug=False)
+        
