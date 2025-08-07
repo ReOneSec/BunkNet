@@ -125,15 +125,22 @@ class Blockchain:
             state_col.update_one({'_id': recipient}, {'$set': {'balance': new_recipient_balance}}, upsert=True, session=session)
 
     def add_transaction_to_mempool(self, sender, recipient, amount, fee, nonce, signature, public_key):
+        # 1. Construct the exact data object that was signed
         tx_data = {'sender': sender, 'recipient': recipient, 'amount': amount, 'fee': fee, 'nonce': nonce}
+
+        # 2. Recover the public key from the signature to get the ground truth
         is_valid, derived_pk = self.verify_signature(signature, tx_data)
         if not is_valid:
             return {'error': 'Invalid signature.'}
-        if derived_pk.to_hex().lower() != public_key.lower():
-             return {'error': 'Public key does not correspond to signature.'}
+
+        # --- THE FINAL FIX IS HERE ---
+        # 3. The only check that matters: Does the sender's address match the address from the signature?
+        # We no longer need to check the public_key from the payload.
         derived_address = public_key_to_address(derived_pk)
         if sender.lower() != derived_address.lower():
-            return {'error': 'Sender address does not match public key.'}
+            return {'error': 'Sender address does not match the signature.'}
+
+        # 4. Check nonce and balance
         account_state = self.get_account_state(sender)
         if int(nonce) != account_state['nonce']:
             return {'error': f"Invalid nonce. Expected {account_state['nonce']}, got {nonce}."}
@@ -141,9 +148,12 @@ class Blockchain:
             return {'error': 'Insufficient funds.'}
         if mempool_col.find_one({'sender': sender, 'nonce': int(nonce)}):
             return {'error': 'Transaction with this nonce already in mempool.'}
+
+        # 5. All checks passed, add to mempool
         full_tx = {**tx_data, 'transaction_id': str(uuid.uuid4()), 'type': 'transfer', 'timestamp': time.time()}
         mempool_col.insert_one(full_tx)
         return full_tx
+        
 
     @staticmethod
     def verify_signature(signature_hex, transaction_data):
