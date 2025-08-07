@@ -225,7 +225,8 @@ class Blockchain:
             if public_key_hex.startswith('04'):
                 public_key_hex = public_key_hex[2:]
             vk = ecdsa.VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=ecdsa.SECP256k1)
-            tx_data_str = json.dumps(transaction_data, sort_keys=True).encode()
+            # NEW CODE
+            tx_data_str = json.dumps(transaction_data, sort_keys=True, separators=(',', ':')).encode()
             tx_hash = hashlib.sha256(tx_data_str).digest()
             return vk.verify(bytes.fromhex(signature_hex), tx_hash)
         except Exception as e:
