@@ -85,7 +85,6 @@ def p2p_required(f):
     return decorated_function
 
 def public_key_to_address(public_key: PublicKey) -> str:
-    """Converts an eth_keys PublicKey object to a standard Ethereum checksum address."""
     return public_key.to_checksum_address()
 
 # =============================================================================
@@ -112,38 +111,27 @@ class Blockchain:
     def process_transactions(self, transactions, session=None):
         for tx in transactions:
             sender, recipient, amount_str = tx['sender'], tx['recipient'], tx['amount']
-            amount = float(amount_str) # Cast to float for calculations
+            amount = float(amount_str)
             fee = float(tx.get('fee', '0'))
-            
             if sender != '0':
                 sender_state = self.get_account_state(sender, session=session)
                 new_sender_balance = sender_state['balance'] - amount - fee
                 new_sender_nonce = sender_state['nonce'] + 1
                 state_col.update_one({'_id': sender}, {'$set': {'balance': new_sender_balance, 'nonce': new_sender_nonce}}, upsert=True, session=session)
-            
             recipient_state = self.get_account_state(recipient, session=session)
             new_recipient_balance = recipient_state['balance'] + amount
             state_col.update_one({'_id': recipient}, {'$set': {'balance': new_recipient_balance}}, upsert=True, session=session)
 
     def add_transaction_to_mempool(self, sender, recipient, amount, fee, nonce, signature, public_key):
-        # 1. Construct the exact data object that was signed on the client (using strings)
         tx_data = {'sender': sender, 'recipient': recipient, 'amount': amount, 'fee': fee, 'nonce': nonce}
-
-        # 2. Recover the public key from the signature to ensure it's authentic
         is_valid, derived_pk = self.verify_signature(signature, tx_data)
         if not is_valid:
             return {'error': 'Invalid signature.'}
-
-        # 3. Verify the public key sent by the client matches the one recovered from the signature
         if derived_pk.to_hex().lower() != public_key.lower():
              return {'error': 'Public key does not correspond to signature.'}
-
-        # 4. Verify the sender address matches the recovered public key
         derived_address = public_key_to_address(derived_pk)
         if sender.lower() != derived_address.lower():
             return {'error': 'Sender address does not match public key.'}
-
-        # 5. Check nonce and balance (casting to float for balance check)
         account_state = self.get_account_state(sender)
         if int(nonce) != account_state['nonce']:
             return {'error': f"Invalid nonce. Expected {account_state['nonce']}, got {nonce}."}
@@ -151,15 +139,41 @@ class Blockchain:
             return {'error': 'Insufficient funds.'}
         if mempool_col.find_one({'sender': sender, 'nonce': int(nonce)}):
             return {'error': 'Transaction with this nonce already in mempool.'}
-
-        # 6. All checks passed, add to mempool
         full_tx = {**tx_data, 'transaction_id': str(uuid.uuid4()), 'type': 'transfer', 'timestamp': time.time()}
         mempool_col.insert_one(full_tx)
-        # We don't store the signature/public_key in the mempool as they are only for verification
         return full_tx
 
+    @staticmethod
+    def verify_signature(signature_hex, transaction_data):
+        # This is the final, robust version of this function
+        try:
+            # The client sends a pure 130-char hex string, no '0x'
+            signature_bytes = bytes.fromhex(signature_hex)
+
+            # --- THE FINAL FIX: NORMALIZE THE 'v' VALUE ---
+            # The last byte is the 'v' value.
+            v = signature_bytes[64]
+            # If v is 27 or 28 (legacy), normalize it to 0 or 1
+            if v >= 27:
+                normalized_v = v - 27
+                # Reconstruct the signature with the normalized v
+                normalized_signature_bytes = signature_bytes[:64] + bytes([normalized_v])
+                sig = Signature(normalized_signature_bytes)
+            else:
+                # If v is already 0 or 1, use it as is
+                sig = Signature(signature_bytes)
+            
+            tx_data_str = json.dumps(transaction_data, sort_keys=True, separators=(',', ':')).encode()
+            message_hash = hashlib.sha256(tx_data_str).digest()
+
+            recovered_pk = sig.recover_public_key_from_msg_hash(message_hash)
+            return True, recovered_pk
+        except Exception as e:
+            logging.error(f"Signature verification failed: {e}")
+            return False, None
+
+    # --- Other Blockchain methods (no changes required) ---
     def mine_block(self):
-        # ... (mine_block logic remains mostly the same) ...
         prev_block = self.get_previous_block()
         if not prev_block:
             logging.error("Could not find previous block to mine on top of.")
@@ -183,24 +197,6 @@ class Blockchain:
                     logging.error(f"ATOMIC MINE FAILED: Transaction aborted due to an error: {e}")
                     return None
 
-    @staticmethod
-    def verify_signature(signature_hex, transaction_data):
-        try:
-            # Client sends a pure hex string, no '0x'
-            signature_bytes = bytes.fromhex(signature_hex)
-            sig = Signature(signature_bytes)
-
-            tx_data_str = json.dumps(transaction_data, sort_keys=True, separators=(',', ':')).encode()
-            message_hash = hashlib.sha256(tx_data_str).digest()
-
-            # Recover the public key directly from the signature and hash
-            recovered_pk = sig.recover_public_key_from_msg_hash(message_hash)
-            return True, recovered_pk
-        except Exception as e:
-            logging.error(f"Signature verification with eth_keys failed: {e}")
-            return False, None
-
-    # --- Other Blockchain methods (no changes) ---
     def adjust_difficulty(self, last_block, session=None):
         if last_block['index'] % DIFFICULTY_ADJUSTMENT_INTERVAL != 0 or last_block['index'] <= 1: return
         prev_adjustment_block = blocks_col.find_one({'index': last_block['index'] - DIFFICULTY_ADJUSTMENT_INTERVAL}, session=session)
@@ -241,14 +237,22 @@ class Blockchain:
         block_copy = block.copy(); block_copy.pop('hash', None)
         block_string = json.dumps(block_copy, sort_keys=True, default=str).encode()
         return hashlib.sha256(block_string).hexdigest()
-
+        
 # =============================================================================
 # Flask API Endpoints
 # =============================================================================
 blockchain = Blockchain()
 
-# --- All endpoints are the same, no changes needed below this line ---
+@app.route('/new_transaction', methods=['POST'])
+def new_transaction_endpoint():
+    values = request.get_json()
+    required = ['sender', 'recipient', 'amount', 'fee', 'nonce', 'signature', 'public_key']
+    if not all(key in values for key in required): return jsonify({'error': 'Missing required fields'}), 400
+    result = blockchain.add_transaction_to_mempool(**values)
+    if 'error' in result: return jsonify(result), 400
+    return jsonify({'message': 'Transaction added to mempool', 'transaction_id': result['transaction_id']}), 201
 
+# --- Other endpoints (no changes required) ---
 @app.route('/status', methods=['GET'])
 def get_status():
     try:
@@ -316,20 +320,11 @@ def get_transaction(tx_id):
     if tx_mempool: return jsonify(prepare_json_response({**tx_mempool, "block_index": "Pending"})), 200
     return jsonify({"error": "Transaction not found"}), 404
 
-@app.route('/new_transaction', methods=['POST'])
-def new_transaction_endpoint():
-    values = request.get_json()
-    required = ['sender', 'recipient', 'amount', 'fee', 'nonce', 'signature', 'public_key']
-    if not all(key in values for key in required): return jsonify({'error': 'Missing required fields'}), 400
-    result = blockchain.add_transaction_to_mempool(**values)
-    if 'error' in result: return jsonify(result), 400
-    return jsonify({'message': 'Transaction added to mempool', 'transaction_id': result['transaction_id']}), 201
-
 @app.route('/get_mempool', methods=['GET'])
 def get_mempool():
     mempool = list(mempool_col.find({}, {'_id': 0}))
     return jsonify({"mempool": mempool, "count": len(mempool)}), 200
-    
+
 @app.route('/admin/mint', methods=['POST'])
 @admin_required
 def admin_mint_tokens():
@@ -355,7 +350,7 @@ def admin_burn_tokens():
     mempool_col.insert_one(burn_tx)
     logging.info(f"ADMIN: Created burn transaction for {amount} $BUNK from {sender}")
     return jsonify({'message': f'Burn transaction for {amount} $BUNK from {sender} has been added to the mempool.'}), 201
-    
+
 # =============================================================================
 # Main Execution
 # =============================================================================
@@ -364,5 +359,5 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
     args = parser.parse_args()
     logging.info(f"Starting BunkNet node on port {args.port}")
-    app.run(host='0.0.0.0', port=args.port, debug=False)
-        
+    app.run(host='0.z0.0.0', port=args.port, debug=False)
+                    
