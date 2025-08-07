@@ -9,6 +9,8 @@ from functools import wraps
 import time
 import logging
 
+# ... other imports
+from eth_keys.datatypes import PublicKey, Signature
 import binascii
 import ecdsa
 import requests
@@ -219,30 +221,31 @@ class Blockchain:
             if hash_op.startswith(difficulty_prefix): return new_proof
             new_proof += 1
             
+
+        # In blockchain.py, inside the Blockchain class
+
     @staticmethod
     def verify_signature(public_key_hex, signature_hex, transaction_data):
-        # Final sanity check to ensure the latest code is running
-        logging.warning("✅ LATEST SERVER CODE IS RUNNING! ✅")
+        logging.warning("✅ USING NEW ETH_KEYS LIBRARY ✅")
         try:
-            if public_key_hex.startswith('04'):
-                public_key_hex = public_key_hex[2:]
+            # Create a signature object from the 64-byte signature hex
+            signature_bytes = bytes.fromhex(signature_hex)
+            sig = Signature(signature_bytes)
 
-            vk = ecdsa.VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=ecdsa.SECP256k1)
-            
-            # This creates the compact JSON string, perfectly matching the client.
+            # Create a public key object from the 64-byte public key hex
+            public_key_bytes = bytes.fromhex(public_key_hex)
+            pk = PublicKey(public_key_bytes)
+
+            # Create the message hash
             tx_data_str = json.dumps(transaction_data, sort_keys=True, separators=(',', ':')).encode()
+            message_hash = hashlib.sha256(tx_data_str).digest()
             
-            # Log the exact string being verified for final debugging.
-            logging.info(f"SERVER HASHING THIS STRING: {tx_data_str.decode()}")
-            
-            tx_hash = hashlib.sha256(tx_data_str).digest()
-            
-            return vk.verify(bytes.fromhex(signature_hex), tx_hash)
+            # The actual verification
+            return pk.verify_signature(message_hash, sig)
         except Exception as e:
-            logging.error(f"Signature verification failed: {e}")
+            logging.error(f"Signature verification with eth_keys failed: {e}")
             return False
             
-
     def create_block(self, proof, previous_hash, transactions, session=None):
         last_block = self.get_previous_block(session=session)
         index = last_block['index'] + 1 if last_block else 1
