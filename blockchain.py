@@ -224,11 +224,17 @@ class Blockchain:
 
         # In blockchain.py, inside the Blockchain class
 
-    @staticmethod
+        @staticmethod
     def verify_signature(public_key_hex, signature_hex, transaction_data):
         logging.warning("✅ USING NEW ETH_KEYS LIBRARY ✅")
         try:
-            # Create a signature object from the 64-byte signature hex
+            # --- FINAL FIX: Remove "0x" prefix from BOTH inputs ---
+            if signature_hex.startswith('0x'):
+                signature_hex = signature_hex[2:]
+            if public_key_hex.startswith('0x'):
+                public_key_hex = public_key_hex[2:]
+
+            # Create a signature object from the 65-byte signature hex
             signature_bytes = bytes.fromhex(signature_hex)
             sig = Signature(signature_bytes)
 
@@ -245,6 +251,7 @@ class Blockchain:
         except Exception as e:
             logging.error(f"Signature verification with eth_keys failed: {e}")
             return False
+
             
     def create_block(self, proof, previous_hash, transactions, session=None):
         last_block = self.get_previous_block(session=session)
