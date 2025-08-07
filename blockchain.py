@@ -34,7 +34,6 @@ load_dotenv()
 MONGO_URI = environ.get('BUNKNET_MONGO_URI', 'mongodb://localhost:27017/?replicaSet=rs0')
 ADMIN_SECRET_KEY = environ.get('BUNKNET_ADMIN_KEY', 'bunknet_super_admin_key')
 P2P_SECRET_KEY = environ.get('BUNKNET_P2P_KEY', 'bunknet_super_secret_p2p_key')
-
 MINER_ADDRESS = environ.get('BUNKNET_MINER_ADDRESS', '0x000000000000000000000000000000000000BEEF')
 TREASURY_ADDRESS = environ.get('BUNKNET_TREASURY_ADDRESS')
 FAUCET_ADDRESS = environ.get('BUNKNET_FAUCET_ADDRESS')
@@ -86,7 +85,7 @@ def admin_required(f):
             return jsonify({'error': 'Unauthorized: Admin key required'}), 401
         return f(*args, **kwargs)
     return decorated_function
-
+    
 def p2p_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -113,7 +112,6 @@ if FAUCET_SEED:
         faucet_verifying_key = faucet_private_key.get_verifying_key()
         FAUCET_PUBLIC_KEY = binascii.hexlify(faucet_verifying_key.to_string()).decode()
         derived_faucet_address = public_key_to_address(faucet_verifying_key)
-
         if FAUCET_ADDRESS and FAUCET_ADDRESS.lower() != derived_faucet_address.lower():
             logging.error("FATAL: FAUCET_ADDRESS in .env does not match address from BUNKNET_FAUCET_SEED.")
             exit()
@@ -222,22 +220,18 @@ class Blockchain:
             if hash_op.startswith(difficulty_prefix): return new_proof
             new_proof += 1
             
-@staticmethod
-def verify_signature(public_key_hex, signature_hex, transaction_data):
-    try:
-        # THE FIX: Ensure we use the 64-byte (128 hex chars) public key for verification.
-        if public_key_hex.startswith('04'):
-            public_key_hex = public_key_hex[2:]
-
-        vk = ecdsa.VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=ecdsa.SECP256k1)
-        
-        tx_data_str = json.dumps(transaction_data, sort_keys=True).encode()
-        tx_hash = hashlib.sha256(tx_data_str).digest()
-        
-        return vk.verify(bytes.fromhex(signature_hex), tx_hash)
-    except Exception as e:
-        logging.error(f"Signature verification failed: {e}")
-        return False
+    @staticmethod
+    def verify_signature(public_key_hex, signature_hex, transaction_data):
+        try:
+            if public_key_hex.startswith('04'):
+                public_key_hex = public_key_hex[2:]
+            vk = ecdsa.VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=ecdsa.SECP256k1)
+            tx_data_str = json.dumps(transaction_data, sort_keys=True).encode()
+            tx_hash = hashlib.sha256(tx_data_str).digest()
+            return vk.verify(bytes.fromhex(signature_hex), tx_hash)
+        except Exception as e:
+            logging.error(f"Signature verification failed: {e}")
+            return False
 
     def create_block(self, proof, previous_hash, transactions, session=None):
         last_block = self.get_previous_block(session=session)
@@ -429,13 +423,8 @@ def admin_mint_tokens():
     values = request.get_json()
     recipient = values.get('recipient')
     amount = float(values.get('amount', 0))
-    if not recipient or amount <= 0:
-        return jsonify({'error': 'Recipient and a positive amount are required'}), 400
-    
-    mint_tx = {
-        'transaction_id': str(uuid.uuid4()), 'sender': '0', 'recipient': recipient, 'amount': amount,
-        'nonce': -1, 'type': 'admin_mint', 'timestamp': time.time()
-    }
+    if not recipient or amount <= 0: return jsonify({'error': 'Recipient and a positive amount are required'}), 400
+    mint_tx = {'transaction_id': str(uuid.uuid4()),'sender': '0','recipient': recipient,'amount': amount,'nonce': -1,'type': 'admin_mint','timestamp': time.time()}
     mempool_col.insert_one(mint_tx)
     logging.info(f"ADMIN: Minted {amount} $BUNK to {recipient}")
     return jsonify({'message': f'Mint transaction for {amount} $BUNK to {recipient} has been added to the mempool.'}), 201
@@ -443,28 +432,17 @@ def admin_mint_tokens():
 @app.route('/admin/burn', methods=['POST'])
 @admin_required
 def admin_burn_tokens():
-    # This is a simplified burn. A real one would need a signature.
     values = request.get_json()
     sender = values.get('sender')
     amount = float(values.get('amount', 0))
-
-    if not sender or amount <= 0:
-        return jsonify({'error': 'Sender address and a positive amount are required'}), 400
-
+    if not sender or amount <= 0: return jsonify({'error': 'Sender address and a positive amount are required'}), 400
     account_state = blockchain.get_account_state(sender)
-    if account_state['balance'] < amount:
-        return jsonify({'error': f'Insufficient funds to burn. Address has {account_state["balance"]} $BUNK.'}), 400
-
-    # We create an unsigned transaction to the burn address
-    # and manually increment the sender's nonce in the state
-    burn_tx = {
-        'transaction_id': str(uuid.uuid4()), 'sender': sender, 'recipient': "0x000000000000000000000000000000000000dEaD", 'amount': amount,
-        'nonce': account_state['nonce'], 'type': 'burn', 'fee': 0.0, 'timestamp': time.time()
-    }
+    if account_state['balance'] < amount: return jsonify({'error': f'Insufficient funds. Address has {account_state["balance"]} $BUNK.'}), 400
+    burn_tx = {'transaction_id': str(uuid.uuid4()),'sender': sender,'recipient': "0x000000000000000000000000000000000000dEaD",'amount': amount,'nonce': account_state['nonce'],'type': 'burn','fee': 0.0,'timestamp': time.time()}
     mempool_col.insert_one(burn_tx)
     logging.info(f"ADMIN: Created burn transaction for {amount} $BUNK from {sender}")
     return jsonify({'message': f'Burn transaction for {amount} $BUNK from {sender} has been added to the mempool.'}), 201
-    
+
 # =============================================================================
 # Main Execution
 # =============================================================================
