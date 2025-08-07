@@ -123,7 +123,7 @@ const templates = {
         
         const latestTxs = blocksData.chain.flatMap(b => b.transactions).sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
         document.getElementById('latest-txs-list').innerHTML = `<table class="data-table"><thead><tr><th>Hash</th><th>From</th><th>To</th><th class="text-right">Amount</th></tr></thead><tbody>${latestTxs.map(tx => `
-            <tr><td><a href="#/transaction/${tx.transaction_id}" class="hash-link font-mono text-xs">${tx.transaction_id.substring(0, 10)}...</a></td><td>${utils.getDisplayName(tx.sender)}</td><td>${utils.getDisplayName(tx.recipient)}</td><td class="text-right font-mono font-bold text-accent-primary">${tx.amount.toFixed(2)} $BUNK</td></tr>`).join('')}</tbody></table>`;
+            <tr><td><a href="#/transaction/${tx.transaction_id}" class="hash-link font-mono text-xs">${tx.transaction_id.substring(0, 10)}...</a></td><td>${utils.getDisplayName(tx.sender)}</td><td>${utils.getDisplayName(tx.recipient)}</td><td class="text-right font-mono font-bold text-accent-primary">${parseFloat(tx.amount).toFixed(2)} $BUNK</td></tr>`).join('')}</tbody></table>`;
     },
 
     async renderDetailView(fetchData, renderContent) {
@@ -146,7 +146,7 @@ const templates = {
                     <table class="data-table">
                         <thead><tr><th>Hash</th><th>From</th><th>To</th><th class="text-right">Amount</th></tr></thead>
                         <tbody>${block.transactions.map(tx => `
-                            <tr><td><a href="#/transaction/${tx.transaction_id}" class="hash-link font-mono text-xs">${tx.transaction_id.substring(0, 10)}...</a></td><td>${utils.getDisplayName(tx.sender)}</td><td>${utils.getDisplayName(tx.recipient)}</td><td class="text-right font-mono font-bold text-accent-primary">${tx.amount.toFixed(2)} $BUNK</td></tr>`).join('')}</tbody>
+                            <tr><td><a href="#/transaction/${tx.transaction_id}" class="hash-link font-mono text-xs">${tx.transaction_id.substring(0, 10)}...</a></td><td>${utils.getDisplayName(tx.sender)}</td><td>${utils.getDisplayName(tx.recipient)}</td><td class="text-right font-mono font-bold text-accent-primary">${parseFloat(tx.amount).toFixed(2)} $BUNK</td></tr>`).join('')}</tbody>
                     </table>
                 </div>`;
         });
@@ -162,7 +162,7 @@ const templates = {
                 <table class="data-table">
                     <thead><tr><th>Hash</th><th>From</th><th>To</th><th class="text-right">Amount & Time</th></tr></thead>
                     <tbody>${data.transactions.length ? data.transactions.slice().reverse().map(tx => `
-                        <tr><td><a href="#/transaction/${tx.transaction_id}" class="hash-link font-mono text-xs">${tx.transaction_id.substring(0, 12)}...</a></td><td>${utils.getDisplayName(tx.sender)}</td><td>${utils.getDisplayName(tx.recipient)}</td><td class="text-right"><span class="${tx.recipient === address ? 'text-green-500' : 'text-red-500'} font-mono">${tx.recipient === address ? '+' : '-'}${tx.amount.toFixed(2)}</span><br><span class="text-xs text-text-secondary">${utils.formatTimeAgo(tx.timestamp)}</span></td></tr>`).join('') : ''}</tbody>
+                        <tr><td><a href="#/transaction/${tx.transaction_id}" class="hash-link font-mono text-xs">${tx.transaction_id.substring(0, 12)}...</a></td><td>${utils.getDisplayName(tx.sender)}</td><td>${utils.getDisplayName(tx.recipient)}</td><td class="text-right"><span class="${tx.recipient === address ? 'text-green-500' : 'text-red-500'} font-mono">${tx.recipient === address ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}</span><br><span class="text-xs text-text-secondary">${utils.formatTimeAgo(tx.timestamp)}</span></td></tr>`).join('') : ''}</tbody>
                 </table>
                 ${!data.transactions.length ? '<p class="p-4 text-text-secondary">No transactions for this address.</p>' : ''}
             </div>`);
@@ -174,7 +174,7 @@ const templates = {
             return `
                 <h2 class="text-3xl font-bold mb-6">Transaction Details</h2>
                 <div class="content-card">
-                    <dl>${detailItem('Tx Hash', `<div class="flex items-center gap-2 font-mono">${tx.transaction_id}</div>`)} ${detailItem('Block', `<a href="#/block/${tx.block_index}" class="hash-link">#${tx.block_index}</a>`)} ${detailItem('From', utils.getDisplayName(tx.sender, false))} ${detailItem('To', utils.getDisplayName(tx.recipient, false))} ${detailItem('Amount', `<span class="font-mono text-lg font-bold text-accent-primary">${tx.amount.toFixed(4)} $BUNK</span>`)}</dl>
+                    <dl>${detailItem('Tx Hash', `<div class="flex items-center gap-2 font-mono">${tx.transaction_id}</div>`)} ${detailItem('Block', `<a href="#/block/${tx.block_index}" class="hash-link">#${tx.block_index}</a>`)} ${detailItem('From', utils.getDisplayName(tx.sender, false))} ${detailItem('To', utils.getDisplayName(tx.recipient, false))} ${detailItem('Amount', `<span class="font-mono text-lg font-bold text-accent-primary">${parseFloat(tx.amount).toFixed(4)} $BUNK</span>`)}</dl>
                 </div>`;
         });
     }
@@ -195,7 +195,7 @@ async function router() {
     const action = routes[view] || routes.dashboard;
     await action.call(templates, param);
     if (!view || view === 'dashboard') {
-        dashboardPollId = setInterval(templates.updateDashboard, POLLING_RATE_MS);
+        dashboardPollId = setInterval(() => templates.updateDashboard(), POLLING_RATE_MS);
     }
 }
 
@@ -217,13 +217,11 @@ async function init() {
 
     if (navToggleBtn && mobileMenu) {
         navToggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevents the window click listener from firing immediately
+            e.stopPropagation();
             mobileMenu.classList.toggle('hidden');
         });
 
-        // Add a listener to the window to close the menu when clicking outside
         window.addEventListener('click', (e) => {
-            // Check if the menu is open and if the click was outside the menu
             if (!mobileMenu.classList.contains('hidden') && !mobileMenu.contains(e.target) && !navToggleBtn.contains(e.target)) {
                 mobileMenu.classList.add('hidden');
             }
