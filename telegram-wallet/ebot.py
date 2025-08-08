@@ -338,7 +338,7 @@ def main() -> None:
     if not TELEGRAM_BOT_TOKEN or not BOT_SECRET_KEY:
         logging.error("Bot tokens and secret key must be set in the .env file."); return
     
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).job_queue(None).build()
     
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
