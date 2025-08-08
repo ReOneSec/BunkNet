@@ -7,7 +7,7 @@ import hashlib
 import datetime
 import re
 import binascii
-import https #requests
+import httpx #requests
 
 from dotenv import load_dotenv
 from mnemonic import Mnemonic
