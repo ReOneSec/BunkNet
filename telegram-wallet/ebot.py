@@ -283,8 +283,10 @@ async def get_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return CONFIRM_SEND
     except ValueError: await update.message.reply_text("Invalid amount. Cancelling."); return ConversationHandler.END
 
+
 async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
+    query = update.callback_query
+    await query.answer()
     if query.data != "confirm_send":
         await query.edit_message_text(text="Transaction cancelled.", reply_markup=get_main_menu_keyboard())
         context.user_data.clear()
@@ -323,8 +325,10 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
         amount_str = escape_markdown(f"{amount:.4f}")
         recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
         explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+        
+        # --- THIS LINE IS NOW CORRECTED ---
         result_message = (f"✅ *Transaction Successful*\n\n"
-                          f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`.\n\n"
+                          f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
                           f"[View on Explorer]({explorer_url})")
 
     except requests.exceptions.RequestException as e:
@@ -333,9 +337,15 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
         except: pass
         result_message = f"❌ *Transaction Failed*\n\n`{escape_markdown(error_msg)}`"
     
-    await query.edit_message_text(text=result_message, reply_markup=get_main_menu_keyboard(), parse_mode='MarkdownV2', disable_web_page_preview=True)
+    await query.edit_message_text(
+        text=result_message,
+        reply_markup=get_main_menu_keyboard(),
+        parse_mode='MarkdownV2',
+        disable_web_page_preview=True
+    )
     context.user_data.clear()
     return MAIN_MENU
+        
 
 # =============================================================================
 # MAIN APPLICATION LOOP
