@@ -6,18 +6,18 @@ import json
 import hashlib
 import datetime
 import re
-
+import binascii
 import requests
+
 from dotenv import load_dotenv
 from mnemonic import Mnemonic
-# --- CORRECTED IMPORT TO MATCH DOCUMENTATION ---
 from eth_keys import keys
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 from pymongo import MongoClient
 from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes
-
+from Crypto.Util.Padding import pad, unpad
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
