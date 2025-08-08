@@ -69,21 +69,27 @@ def public_key_to_address(public_key: keys.PublicKey) -> str:
     return public_key.to_checksum_address()
 
 def encrypt_mnemonic(mnemonic: str, user_id: int) -> str:
-    key_seed = f"{BOT_SECRET_KEY}{user_id}".encode()
     salt = get_random_bytes(16)
-    key = hashlib.pbkdf2_hmac('sha256', key_seed, salt, 100000, 32)
-    cipher = AES.new(key, AES.MODE_GCM)
-    encrypted, tag = cipher.encrypt_and_digest(mnemonic.encode())
-    return (salt + cipher.nonce + tag + encrypted).hex()
+    password = f"{BOT_SECRET_KEY}{user_id}".encode()
+    key = hashlib.pbkdf2_hmac('sha256', password, salt, 100000, 32)
+    cipher = AES.new(key, AES.MODE_CBC)
+    encrypted_data = cipher.encrypt(pad(mnemonic.encode(), AES.block_size))
+    # Combine salt, iv, and encrypted data for storage
+    return binascii.hexlify(salt + cipher.iv + encrypted_data).decode()
 
 def decrypt_mnemonic(encrypted_hex: str, user_id: int) -> str:
-    encrypted_bytes = bytes.fromhex(encrypted_hex)
-    salt, nonce, tag, ciphertext = encrypted_bytes[:16], encrypted_bytes[16:32], encrypted_bytes[32:48], encrypted_bytes[48:]
-    key_seed = f"{BOT_SECRET_KEY}{user_id}".encode()
-    key = hashlib.pbkdf2_hmac('sha256', key_seed, salt, 100000, 32)
-    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-    return cipher.decrypt_and_verify(ciphertext, tag).decode()
-
+    encrypted_bytes = binascii.unhexlify(encrypted_hex)
+    salt = encrypted_bytes[:16]
+    iv = encrypted_bytes[16:32]
+    ciphertext = encrypted_bytes[32:]
+    
+    password = f"{BOT_SECRET_KEY}{user_id}".encode()
+    key = hashlib.pbkdf2_hmac('sha256', password, salt, 100000, 32)
+    cipher = AES.new(key, AES.MODE_CBC, iv=iv)
+    
+    decrypted_padded = cipher.decrypt(ciphertext)
+    return unpad(decrypted_padded, AES.block_size).decode()
+    
 def get_or_create_wallet(user_id: int, username: str) -> dict:
     user = users_col.find_one({"telegram_id": user_id})
     if user:
