@@ -10,9 +10,8 @@ import re
 import requests
 from dotenv import load_dotenv
 from mnemonic import Mnemonic
-# --- CORRECTED IMPORTS ---
-from eth_keys.keys import PrivateKey
-from eth_keys.datatypes import PublicKey
+# --- CORRECTED IMPORT TO MATCH DOCUMENTATION ---
+from eth_keys import keys
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
@@ -56,16 +55,16 @@ def hash_pin(pin: str, user_id: int) -> str:
     salt = str(user_id).encode()
     return hashlib.pbkdf2_hmac('sha256', pin.encode(), salt, 100000, 64).hex()
 
-# --- Wallet & Crypto Helpers ---
-def get_private_key_from_mnemonic(mnemonic: str) -> PrivateKey:
+# --- Wallet & Crypto Helpers (UPDATED) ---
+def get_private_key_from_mnemonic(mnemonic: str) -> keys.PrivateKey:
     """Derives an eth_keys PrivateKey using the standard BIP-44 path."""
     seed_bytes = Bip39SeedGenerator(mnemonic).Generate()
     bip44_mst_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
     bip44_acc_ctx = bip44_mst_ctx.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0)
     private_key_bytes = bip44_acc_ctx.PrivateKey().Raw().ToBytes()
-    return PrivateKey(private_key_bytes)
+    return keys.PrivateKey(private_key_bytes)
 
-def public_key_to_address(public_key: PublicKey) -> str:
+def public_key_to_address(public_key: keys.PublicKey) -> str:
     """Converts an eth_keys PublicKey object to an Ethereum checksum address."""
     return public_key.to_checksum_address()
 
@@ -318,7 +317,6 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
         amount_str = escape_markdown(f"{amount:.4f}")
         recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
         explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
-        # --- CORRECTED SYNTAX WARNING ---
         result_message = (f"✅ *Transaction Successful*\n\n"
                           f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`.\n\n"
                           f"[View on Explorer]({explorer_url})")
