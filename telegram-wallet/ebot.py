@@ -7,7 +7,7 @@ import hashlib
 import datetime
 import re
 import binascii
-import requests
+import https #requests
 
 from dotenv import load_dotenv
 from mnemonic import Mnemonic
@@ -199,36 +199,74 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             message = "\n\n".join(message_parts)
     except requests.exceptions.RequestException as e:
         logging.error(f"Could not fetch transaction history: {e}")
-        message = escape_markdown("Could not fetch transaction history from the network.")
+
+
+# --- Replace these four functions in your ebot.py ---
+
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query; await query.answer(); await query.message.delete()
+    user_wallet = get_or_create_wallet(update.effective_user.id, "")
+    message = ""
+    # Use an async client for non-blocking network calls
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{BFF_API_URL}/address/{user_wallet['address']}")
+            response.raise_for_status()
+            balance_val = response.json().get('balance', 0)
+            balance_str = escape_markdown(f"{balance_val:.4f}")
+            message = f"Your current balance is:\n\n`{balance_str}` *$BUNK*"
+        except httpx.RequestError:
+            message = escape_markdown("Could not connect to the BunkNet network.")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
+    return MAIN_MENU
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query; await query.answer(); await query.message.delete()
+    user_wallet = get_or_create_wallet(update.effective_user.id, "")
+    address = user_wallet['address']
+    message = ""
+    # Use an async client for non-blocking network calls
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{BFF_API_URL}/address/{address}"); response.raise_for_status()
+            transactions = response.json().get('transactions', [])
+            if not transactions:
+                message = escape_markdown("You have no transactions yet.")
+            else:
+                message_parts = ["*📜 Your 5 most recent transactions:*\n"]
+                for tx in reversed(transactions[-5:]):
+                    direction_icon = "➡" if tx['sender'] == address else "⬅"
+                    direction_text = "Sent" if tx['sender'] == address else "Received"
+                    amount_str = escape_markdown(f"{float(tx['amount']):.4f}")
+                    other_party_addr = tx['recipient'] if direction_text == "Sent" else tx['sender']
+                    display_address = escape_markdown("Network Reward") if other_party_addr == '0' else escape_markdown(f"{other_party_addr[:6]}...{other_party_addr[-6:]}")
+                    tx_id = tx.get('transaction_id', 'N/A')
+                    link_text = escape_markdown(f"{tx_id[:6]}...{tx_id[-6:]}")
+                    explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+                    tx_info = (f"`{direction_icon} {direction_text} {amount_str} $BUNK`\n*To/From:* `{display_address}`\n*Hash:* [{link_text}]({explorer_url})")
+                    message_parts.append(tx_info)
+                message = "\n\n".join(message_parts)
+        except httpx.RequestError as e:
+            logging.error(f"Could not fetch transaction history: {e}")
+            message = escape_markdown("Could not fetch transaction history from the network.")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard(), disable_web_page_preview=True)
     return MAIN_MENU
-    
-async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
-    await query.edit_message_text("⚙️ Settings", reply_markup=get_settings_menu_keyboard())
-    return SETTINGS_MENU
-
-async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
-    await query.edit_message_text("Main Menu:", reply_markup=get_main_menu_keyboard())
-    return MAIN_MENU
-
-async def protected_action_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer()
-    user_wallet = get_or_create_wallet(query.from_user.id, "")
-    if not user_wallet.get('pin_hash'):
-        await query.edit_message_text("Please set a PIN in Settings first.", reply_markup=get_settings_menu_keyboard())
-        return SETTINGS_MENU
-    context.user_data['next_action'] = query.data
-    await query.edit_message_text(f"Please enter your PIN to authorize this action.")
-    return VERIFY_PIN
 
 async def check_pin_and_proceed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pin = update.message.text; await update.message.delete()
+    pin = update.message.text
+    await update.message.delete()
     user_wallet = get_or_create_wallet(update.effective_user.id, "")
+    
     if hash_pin(pin, update.effective_user.id) != user_wallet.get('pin_hash'):
         await context.bot.send_message(chat_id=update.effective_chat.id, text="❌ Incorrect PIN. Action cancelled.", reply_markup=get_main_menu_keyboard())
         return MAIN_MENU
+
+    # --- KEY CACHING ---
+    # Decrypt the mnemonic and derive the key ONCE, then store it temporarily.
+    mnemonic = decrypt_mnemonic(user_wallet['encrypted_mnemonic'], update.effective_user.id)
+    context.user_data['private_key'] = get_private_key_from_mnemonic(mnemonic)
+    # --- END KEY CACHING ---
+
     next_action = context.user_data.get('next_action')
     if next_action == 'backup':
         await perform_backup(update, context)
@@ -237,52 +275,6 @@ async def check_pin_and_proceed(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(chat_id=update.effective_chat.id, text="PIN verified. Who is the recipient (enter 0x address)?")
         return GET_RECIPIENT
     return MAIN_MENU
-
-async def set_pin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query; await query.answer(); await query.edit_message_text("Please enter a new 4-digit PIN.")
-    return NEW_PIN
-
-async def get_new_pin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pin = update.message.text; await update.message.delete()
-    if not (pin.isdigit() and len(pin) == 4):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Invalid PIN. Please enter exactly 4 digits. Or /cancel.")
-        return NEW_PIN
-    context.user_data['new_pin'] = pin
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Please enter your new PIN again to confirm.")
-    return CONFIRM_NEW_PIN
-
-async def get_pin_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    pin = update.message.text; await update.message.delete()
-    if pin != context.user_data.get('new_pin'):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="PINs do not match. Please start over.", reply_markup=get_settings_menu_keyboard())
-        return SETTINGS_MENU
-    pin_hash = hash_pin(pin, update.effective_user.id)
-    users_col.update_one({"telegram_id": update.effective_user.id}, {"$set": {"pin_hash": pin_hash}})
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ PIN successfully set!", reply_markup=get_main_menu_keyboard())
-    return MAIN_MENU
-
-async def perform_backup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    mnemonic = decrypt_mnemonic(get_or_create_wallet(update.effective_user.id, "")['encrypted_mnemonic'], update.effective_user.id)
-    warning = escape_markdown("🛑 *WARNING* 🛑\nAnyone with this phrase can steal your funds. Delete this message after saving.")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=warning, parse_mode='MarkdownV2')
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"`{mnemonic}`", parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard())
-
-async def get_recipient(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['recipient'] = update.message.text; await update.message.reply_text("How much $BUNK?")
-    return GET_AMOUNT
-
-async def get_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    try:
-        amount_str = update.message.text
-        context.user_data['amount'] = float(amount_str)
-        recipient, amount = context.user_data['recipient'], context.user_data['amount']
-        FEE = 0.01
-        text = f"*To:* `{escape_markdown(recipient)}`\n*Amount:* `{amount:.4f} $BUNK`\n*Fee:* `{FEE:.4f} $BUNK`\n*Total:* `{(amount+FEE):.4f} $BUNK`"
-        keyboard = [[InlineKeyboardButton("✅ Confirm", callback_data="confirm_send"), InlineKeyboardButton("❌ Cancel", callback_data="cancel_send")]]
-        await update.message.reply_text(text=f"Please confirm:\n\n{text}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='MarkdownV2')
-        return CONFIRM_SEND
-    except ValueError: await update.message.reply_text("Invalid amount. Cancelling."); return ConversationHandler.END
-
 
 async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -298,54 +290,53 @@ async def process_transaction(update: Update, context: ContextTypes.DEFAULT_TYPE
     recipient, amount = context.user_data['recipient'], context.user_data['amount']
     FEE = "0.01"
 
-    try:
-        addr_info = requests.get(f"{BFF_API_URL}/address/{sender_address}")
-        addr_info.raise_for_status()
-        nonce = addr_info.json().get('nonce', 0)
+    async with httpx.AsyncClient() as client:
+        try:
+            # Use the cached private key instead of decrypting again
+            private_key = context.user_data.get('private_key')
+            if not private_key:
+                raise ValueError("Session expired or key not found. Please try again.")
 
-        mnemonic = decrypt_mnemonic(user_wallet['encrypted_mnemonic'], update.effective_user.id)
-        private_key = get_private_key_from_mnemonic(mnemonic)
-        public_key = private_key.public_key
+            response = await client.get(f"{BFF_API_URL}/address/{sender_address}")
+            response.raise_for_status()
+            nonce = response.json().get('nonce', 0)
 
-        tx_data = {'sender': sender_address, 'recipient': recipient, 'amount': str(amount), 'fee': FEE, 'nonce': nonce}
-        tx_data_str = json.dumps(tx_data, sort_keys=True, separators=(',', ':')).encode()
-        message_hash = hashlib.sha256(tx_data_str).digest()
+            public_key = private_key.public_key
+            tx_data = {'sender': sender_address, 'recipient': recipient, 'amount': str(amount), 'fee': FEE, 'nonce': nonce}
+            tx_data_str = json.dumps(tx_data, sort_keys=True, separators=(',', ':')).encode()
+            message_hash = hashlib.sha256(tx_data_str).digest()
 
-        signature_obj = private_key.sign_msg_hash(message_hash)
-        signature_hex = signature_obj.to_bytes().hex()
-        public_key_hex = public_key.to_bytes().hex()
+            signature_obj = private_key.sign_msg_hash(message_hash)
+            signature_hex = signature_obj.to_bytes().hex()
+            public_key_hex = public_key.to_bytes().hex()
 
-        payload = {**tx_data, 'public_key': public_key_hex, 'signature': signature_hex}
-        
-        response = requests.post(f"{BFF_API_URL}/new_transaction", json=payload)
-        response.raise_for_status()
-        response_data = response.json()
-        tx_id = response_data.get('transaction_id')
-        
-        amount_str = escape_markdown(f"{amount:.4f}")
-        recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
-        explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
-        
-        # --- THIS LINE IS NOW CORRECTED ---
-        result_message = (f"✅ *Transaction Successful*\n\n"
-                          f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
-                          f"[View on Explorer]({explorer_url})")
+            payload = {**tx_data, 'public_key': public_key_hex, 'signature': signature_hex}
+            
+            response = await client.post(f"{BFF_API_URL}/new_transaction", json=payload)
+            response.raise_for_status()
+            response_data = response.json()
+            tx_id = response_data.get('transaction_id')
+            
+            amount_str = escape_markdown(f"{amount:.4f}")
+            recipient_addr_str = escape_markdown(f"{recipient[:6]}...{recipient[-6:]}")
+            explorer_url = f"https://explorer.bunknet.online/#/transaction/{tx_id}"
+            result_message = (f"✅ *Transaction Successful*\n\n"
+                              f"You sent `{amount_str} $BUNK` to `{recipient_addr_str}`\.\n\n"
+                              f"[View on Explorer]({explorer_url})")
 
-    except requests.exceptions.RequestException as e:
-        error_msg = "Could not send transaction."
-        try: error_msg = e.response.json().get('error', error_msg)
-        except: pass
-        result_message = f"❌ *Transaction Failed*\n\n`{escape_markdown(error_msg)}`"
+        except Exception as e:
+            error_msg = "Could not send transaction."
+            if isinstance(e, httpx.HTTPStatusError):
+                try: error_msg = e.response.json().get('error', error_msg)
+                except: pass
+            else:
+                error_msg = str(e)
+            result_message = f"❌ *Transaction Failed*\n\n`{escape_markdown(error_msg)}`"
     
-    await query.edit_message_text(
-        text=result_message,
-        reply_markup=get_main_menu_keyboard(),
-        parse_mode='MarkdownV2',
-        disable_web_page_preview=True
-    )
+    await query.edit_message_text(text=result_message, reply_markup=get_main_menu_keyboard(), parse_mode='MarkdownV2', disable_web_page_preview=True)
     context.user_data.clear()
     return MAIN_MENU
-        
+
 
 # =============================================================================
 # MAIN APPLICATION LOOP
