@@ -198,7 +198,7 @@ def run_load_test(url, total_txs, concurrency, tps_throttle):
     summary_table.add_column("Value", style="magenta")
     summary_table.add_row("✅ Successful Transactions", str(stats['success']))
     summary_table.add_row("❌ Failed Transactions", str(stats['failure']))
-    summary_table.add_row("⏱️  Total Duration", f"{duration:.2f} seconds")
+    summary_table.add_row("⏱️ Total Duration", f"{duration:.2f} seconds")
     summary_table.add_row("🚀 Average TPS", f"{tps:.2f}")
     console.print(summary_table)
     
