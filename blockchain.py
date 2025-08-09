@@ -36,7 +36,7 @@ INITIAL_SUPPLY = 100000000.0
 BASE_BLOCK_REWARD = 50.0
 DIFFICULTY_ADJUSTMENT_INTERVAL = 10
 TARGET_BLOCK_TIME = 15 # Seconds
-MAX_TRANSACTIONS_PER_BLOCK = 200 # NEW: Prevents database timeouts
+MAX_TRANSACTIONS_PER_BLOCK = 200
 
 # =============================================================================
 # Application & Database Setup
@@ -57,6 +57,7 @@ blocks_col = db["blocks"]
 mempool_col = db["mempool"]
 state_col = db["state"]
 config_col = db["config"]
+address_labels_col = db["address_labels"]
 
 # =============================================================================
 # Utility & Decorators
@@ -112,7 +113,7 @@ class Blockchain:
     def process_transactions(self, transactions, session=None):
         for tx in transactions:
             sender, recipient, amount_str = tx['sender'], tx['recipient'], tx['amount']
-            amount = float(amount_str) # Cast to float for calculations
+            amount = float(amount_str)
             fee = float(tx.get('fee', '0'))
             
             if sender != '0':
@@ -126,20 +127,13 @@ class Blockchain:
             state_col.update_one({'_id': recipient}, {'$set': {'balance': new_recipient_balance}}, upsert=True, session=session)
 
     def add_transaction_to_mempool(self, sender, recipient, amount, fee, nonce, signature, public_key):
-        # 1. Construct the exact data object that was signed
         tx_data = {'sender': sender, 'recipient': recipient, 'amount': amount, 'fee': fee, 'nonce': nonce}
-
-        # 2. Recover the public key from the signature to get the ground truth
         is_valid, derived_pk = self.verify_signature(signature, tx_data)
         if not is_valid:
             return {'error': 'Invalid signature.'}
-
-        # 3. The only check that matters: Does the sender's address match the address from the signature?
         derived_address = public_key_to_address(derived_pk)
         if sender.lower() != derived_address.lower():
             return {'error': 'Sender address does not match the signature.'}
-
-        # 4. Check nonce and balance
         account_state = self.get_account_state(sender)
         if int(nonce) != account_state['nonce']:
             return {'error': f"Invalid nonce. Expected {account_state['nonce']}, got {nonce}."}
@@ -147,8 +141,6 @@ class Blockchain:
             return {'error': 'Insufficient funds.'}
         if mempool_col.find_one({'sender': sender, 'nonce': int(nonce)}):
             return {'error': 'Transaction with this nonce already in mempool.'}
-
-        # 5. All checks passed, add to mempool WITH signature and public key for the explorer
         full_tx = {**tx_data, 'transaction_id': str(uuid.uuid4()), 'type': 'transfer', 'timestamp': time.time(), 'signature': signature, 'public_key': public_key}
         mempool_col.insert_one(full_tx)
         return full_tx
@@ -157,24 +149,15 @@ class Blockchain:
     def verify_signature(signature_hex, transaction_data):
         try:
             signature_bytes = bytes.fromhex(signature_hex)
-            v = signature_bytes[64]
-            if v >= 27:
-                normalized_v = v - 27
-                normalized_signature_bytes = signature_bytes[:64] + bytes([normalized_v])
-                sig = Signature(normalized_signature_bytes)
-            else:
-                sig = Signature(signature_bytes)
-            
+            sig = Signature(signature_bytes)
             tx_data_str = json.dumps(transaction_data, sort_keys=True, separators=(',', ':')).encode()
             message_hash = hashlib.sha256(tx_data_str).digest()
-
             recovered_pk = sig.recover_public_key_from_msg_hash(message_hash)
             return True, recovered_pk
         except Exception as e:
             logging.error(f"Signature verification failed: {e}")
             return False, None
 
-    # --- NEW, ROBUST MINE_BLOCK FUNCTION ---
     def mine_block(self):
         prev_block = self.get_previous_block()
         if not prev_block:
@@ -186,30 +169,16 @@ class Blockchain:
         with client.start_session() as session:
             with session.start_transaction():
                 try:
-                    # Only take a limited number of transactions from the mempool
-                    mempool_txs_cursor = mempool_col.find({}, session=session).limit(MAX_TRANSACTIONS_PER_BLOCK)
-                    mempool_txs = list(mempool_txs_cursor)
-
-                    if not mempool_txs:
-                        logging.info("Mempool is empty. Mining a block with only the reward transaction.")
-
-                    # The transactions to be included in the block (without the DB _id)
+                    mempool_txs = list(mempool_col.find({}, session=session).limit(MAX_TRANSACTIONS_PER_BLOCK))
                     transactions_for_block = [{k: v for k, v in tx.items() if k != '_id'} for tx in mempool_txs]
-
                     total_fees = sum(float(tx.get('fee', '0')) for tx in transactions_for_block)
                     reward_tx = {'transaction_id': str(uuid.uuid4()),'sender': '0','recipient': MINER_ADDRESS,'amount': str(BASE_BLOCK_REWARD + total_fees),'nonce': -1,'type': 'reward','timestamp': time.time()}
-                    
                     transactions_to_process = transactions_for_block + [reward_tx]
-                    
                     self.process_transactions(transactions_to_process, session=session)
-                    
                     block = self.create_block(proof, self.hash(prev_block), transactions_to_process, session=session)
-                    
-                    # Only delete the transactions that were actually included in the block
                     if mempool_txs:
                         processed_tx_ids = [tx['_id'] for tx in mempool_txs]
                         mempool_col.delete_many({'_id': {'$in': processed_tx_ids}}, session=session)
-
                     self.adjust_difficulty(block, session=session)
                     logging.info(f"Block {block['index']} mined successfully with {len(transactions_for_block)} transactions.")
                     return block
@@ -257,6 +226,52 @@ class Blockchain:
         block_copy = block.copy(); block_copy.pop('hash', None)
         block_string = json.dumps(block_copy, sort_keys=True, default=str).encode()
         return hashlib.sha256(block_string).hexdigest()
+
+    def add_node(self, address):
+        parsed_url = urlparse(address)
+        self.nodes.add(parsed_url.netloc or parsed_url.path)
+
+    @staticmethod
+    def is_chain_valid(chain):
+        previous_block = chain[0]
+        for i in range(1, len(chain)):
+            block = chain[i]
+            if block['previous_hash'] != Blockchain.hash(previous_block): return False
+            proof, previous_proof = block['proof'], previous_block['proof']
+            hash_operation = hashlib.sha256(str(proof**2 - previous_proof**2).encode()).hexdigest()
+            if not hash_operation.startswith(block.get('difficulty_prefix', '0000')): return False
+            previous_block = block
+        return True
+
+    def resolve_conflicts(self):
+        neighbours = self.nodes
+        new_chain = None
+        max_length = blocks_col.count_documents({})
+        for node in neighbours:
+            try:
+                headers = {'X-P2P-Key': P2P_SECRET_KEY}
+                response = requests.get(f'http://{node}/get_chain', headers=headers, timeout=5)
+                if response.status_code == 200:
+                    length, chain = response.json()['length'], response.json()['chain']
+                    if length > max_length and self.is_chain_valid(chain):
+                        max_length, new_chain = length, chain
+            except requests.exceptions.RequestException: continue
+        if new_chain:
+            logging.info("Found a longer valid chain. Atomically rebuilding local state...")
+            with client.start_session() as session:
+                with session.start_transaction():
+                    blocks_col.delete_many({}, session=session)
+                    blocks_col.insert_many(new_chain, session=session)
+                    state_col.delete_many({}, session=session)
+                    mempool_col.delete_many({}, session=session)
+                    logging.info("Re-processing transactions to rebuild the world state...")
+                    all_blocks = list(blocks_col.find(sort=[("index", 1)], session=session))
+                    for block in all_blocks:
+                        self.process_transactions(block['transactions'], session=session)
+            logging.info("State rebuild complete. Chain is now authoritative.")
+            return True
+        logging.info("Our chain is authoritative.")
+        return False
 
 # =============================================================================
 # Flask API Endpoints
@@ -343,7 +358,34 @@ def get_transaction(tx_id):
 def get_mempool():
     mempool = list(mempool_col.find({}, {'_id': 0}))
     return jsonify({"mempool": mempool, "count": len(mempool)}), 200
+    
+@app.route('/labels', methods=['GET'])
+def get_labels():
+    try:
+        labels = list(address_labels_col.find({}, {'_id': 0}))
+        label_map = {item['address']: item['label'] for item in labels}
+        return jsonify(label_map), 200
+    except Exception as e:
+        logging.error(f"Error in /labels endpoint: {e}")
+        return jsonify({"error": "Could not retrieve labels."}), 500
 
+# --- P2P Networking Endpoints ---
+@app.route('/nodes/register', methods=['POST'])
+@p2p_required
+def register_nodes():
+    nodes = request.get_json().get('nodes')
+    if nodes is None: return "Error: Please supply a valid list of nodes", 400
+    for node in nodes: blockchain.add_node(node)
+    return jsonify({'message': 'New nodes have been added', 'total_nodes': list(blockchain.nodes)}), 201
+
+@app.route('/nodes/resolve', methods=['GET'])
+@p2p_required
+def consensus():
+    replaced = blockchain.resolve_conflicts()
+    message = 'Our chain was replaced' if replaced else 'Our chain is authoritative'
+    return jsonify({'message': message}), 200
+
+# --- Admin Endpoints ---
 @app.route('/admin/mint', methods=['POST'])
 @admin_required
 def admin_mint_tokens():
@@ -356,30 +398,40 @@ def admin_mint_tokens():
     logging.info(f"ADMIN: Minted {amount} $BUNK to {recipient}")
     return jsonify({'message': f'Mint transaction for {amount} $BUNK to {recipient} has been added to the mempool.'}), 201
 
+@app.route('/admin/set_address_label', methods=['POST'])
+@admin_required
+def set_address_label():
+    values = request.get_json()
+    address, label = values.get('address'), values.get('label')
+    if not address or not label:
+        return jsonify({'error': 'Address and label are required'}), 400
+    address_labels_col.update_one(
+        {'address': address},
+        {'$set': {'label': label}},
+        upsert=True
+    )
+    return jsonify({'message': f"Label '{label}' set for address {address[:10]}..."}), 200
+
 @app.route('/admin/burn', methods=['POST'])
 @admin_required
 def admin_burn_tokens():
-values = request.get_json()
-sender = values.get('sender')
-amount = float(values.get('amount', 0))
-if not sender or amount <= 0: return jsonify({'error': 'Sender address and a positive amount are required'}), 400
-account_state = blockchain.get_account_state(sender)
-if account_state['balance'] < amount: return jsonify({'error': f'Insufficient funds. Address has {account_state["balance"]} $BUNK.'}), 400
-burn_tx = {'transaction_id': str(uuid.uuid4()),'sender': sender,'recipient': "0x00000000000000000000000BunkNetBurnWallet",'amount': str(amount),'nonce': account_state['nonce'],'type': 'burn','fee': '0.0','timestamp': time.time()}
-mempool_col.insert_one(burn_tx)
-logging.info(f"ADMIN: Created burn transaction for {amount} $BUNK from {sender}")
-return jsonify({'message': f'Burn transaction for {amount} $BUNK from {sender} has been added to the mempool.'}), 201
-
-
+    values = request.get_json()
+    sender = values.get('sender')
+    amount = float(values.get('amount', 0))
+    if not sender or amount <= 0: return jsonify({'error': 'Sender address and a positive amount are required'}), 400
+    account_state = blockchain.get_account_state(sender)
+    if account_state['balance'] < amount: return jsonify({'error': f'Insufficient funds. Address has {account_state["balance"]} $BUNK.'}), 400
+    burn_tx = {'transaction_id': str(uuid.uuid4()),'sender': sender,'recipient': "0x000000000000000000000000000000000000dEaD",'amount': str(amount),'nonce': account_state['nonce'],'type': 'burn','fee': '0.0','timestamp': time.time()}
+    mempool_col.insert_one(burn_tx)
+    logging.info(f"ADMIN: Created burn transaction for {amount} $BUNK from {sender}")
+    return jsonify({'message': f'Burn transaction for {amount} $BUNK from {sender} has been added to the mempool.'}), 201
+    
 # =============================================================================
-
 # Main Execution
-
 # =============================================================================
-
 if __name__ == '__main__':
-parser = ArgumentParser()
-parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
-args = parser.parse_args()
-logging.info(f"Starting BunkNet node on port {args.port}")
-app.run(host='0.0.0.0', port=args.port, debug=False)
+    parser = ArgumentParser()
+    parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
+    args = parser.parse_args()
+    logging.info(f"Starting BunkNet node on port {args.port}")
+    app.run(host='0.0.0.0', port=args.port, debug=False)
