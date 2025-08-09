@@ -168,7 +168,8 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             for tx in reversed(transactions[-5:]):
                 direction_icon = "➡" if tx['sender'] == address else "⬅"
                 direction_text = "Sent" if tx['sender'] == address else "Received"
-                amount_str = escape_markdown(f"{tx['amount']:.4f}")
+                # THE FIX: Convert amount to a float before formatting
+                amount_str = escape_markdown(f"{float(tx['amount']):.4f}")
                 other_party_addr = tx['recipient'] if direction_text == "Sent" else tx['sender']
                 display_address = escape_markdown("Network Reward") if other_party_addr == '0' else escape_markdown(f"{other_party_addr[:6]}...{other_party_addr[-6:]}")
                 tx_id = tx.get('transaction_id', 'N/A')
@@ -178,9 +179,17 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 message_parts.append(tx_info)
             message = "\n\n".join(message_parts)
     except requests.exceptions.RequestException as e:
-        logging.error(f"Could not fetch transaction history: {e}"); message = escape_markdown("Could not fetch transaction history from the network.")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='MarkdownV2', reply_markup=get_main_menu_keyboard(), disable_web_page_preview=True)
+        logging.error(f"Could not fetch transaction history: {e}")
+        message = escape_markdown("Could not fetch transaction history from the network.")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, 
+        text=message, 
+        parse_mode='MarkdownV2', 
+        reply_markup=get_main_menu_keyboard(), 
+        disable_web_page_preview=True
+    )
     return MAIN_MENU
+    
     
 # --- RE-ADDED THE MISSING settings FUNCTION ---
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -193,16 +202,26 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await query.edit_message_text("Main Menu:", reply_markup=get_main_menu_keyboard())
     return MAIN_MENU
 
-# --- PIN, SEND, BACKUP FLOWS ---
 async def protected_action_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query; await query.answer()
     user_wallet = get_or_create_wallet(query.from_user.id, "")
+
     if not user_wallet.get('pin_hash'):
+        # This part is fine, edit the text
         await query.edit_message_text("Please set a PIN in Settings first.", reply_markup=get_settings_menu_keyboard())
         return SETTINGS_MENU
+        
     context.user_data['next_action'] = query.data
-    await query.edit_message_text(f"Please enter your PIN to authorize this action.")
+    
+    # THE FIX: Delete the old message and send a new one to avoid errors
+    await query.message.delete()
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Please enter your PIN to authorize this action."
+    )
     return VERIFY_PIN
+    
+
 
 async def check_pin_and_proceed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     pin = update.message.text; await update.message.delete()
