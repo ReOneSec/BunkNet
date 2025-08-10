@@ -357,12 +357,26 @@ def mine_block_endpoint():
     if block: return jsonify({'message': 'New Block Forged', 'block': prepare_json_response(block)}), 200
     return jsonify({'error': 'Mining failed and transaction was rolled back.'}), 500
 
+
 @app.route('/address/<address>', methods=['GET'])
 def get_address_details(address):
     state = blockchain.get_account_state(address)
     pipeline = [{"$unwind": "$transactions"},{"$match": {"$or": [{"transactions.sender": address}, {"transactions.recipient": address}]}}, {"$replaceRoot": {"newRoot": {"$mergeObjects": ["$transactions", {"block_index": "$index"}]}}}]
     transactions = list(blocks_col.aggregate(pipeline))
-    return jsonify({'address': address,'balance': state['balance'],'nonce': state['nonce'],'transactions': prepare_json_response(transactions)}), 200
+    
+    # THE FIX: Look up the label for the address
+    label_doc = address_labels_col.find_one({'address': address})
+    label = label_doc.get('label') if label_doc else None
+
+    return jsonify({
+        'address': address,
+        'balance': state['balance'],
+        'nonce': state['nonce'],
+        'transactions': prepare_json_response(transactions),
+        'label': label # Include the label in the response
+    }), 200
+    
+
 
 @app.route('/transaction/<tx_id>', methods=['GET'])
 def get_transaction(tx_id):
