@@ -288,6 +288,9 @@ def new_transaction_endpoint():
     return jsonify({'message': 'Transaction added to mempool', 'transaction_id': result['transaction_id']}), 201
 
  @app.route('/status', methods=['GET'])
+
+
+@app.route('/status', methods=['GET'])
 def get_status():
     try:
         chain_length = blocks_col.count_documents({})
@@ -302,7 +305,7 @@ def get_status():
         ]
         tx_count_result = list(blocks_col.aggregate(pipeline))
         total_transactions = tx_count_result[0]['total_transactions'] if tx_count_result else 0
-        
+
         if last_block and chain_length > 10:
             recent_blocks = list(blocks_col.find({'index': {'$gt': chain_length - 10}}).sort("index", 1))
             if len(recent_blocks) > 1:
@@ -311,19 +314,20 @@ def get_status():
                 difficulty_prefix = blockchain.get_difficulty_prefix()
                 difficulty = 16**len(difficulty_prefix)
                 hash_rate = difficulty / avg_block_time if avg_block_time > 0 else 0
-        
+
         return jsonify({
             'chain_length': chain_length,
             'pending_transactions': pending_transactions,
-            'total_transactions': total_transactions, # <-- NEW field added to the response
+            'total_transactions': total_transactions,  # <-- NEW field added to the response
             'last_block_hash': last_block['hash'] if last_block else '0',
             'average_block_time': avg_block_time,
             'hash_rate': int(hash_rate)
         }), 200
+
     except Exception as e:
         logging.error(f"Error in /status endpoint: {e}")
         return jsonify({"error": "An internal error occurred."}), 500
-        
+
 
 @app.route('/get_chain', methods=['GET'])
 def get_chain():
