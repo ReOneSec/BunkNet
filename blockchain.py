@@ -287,8 +287,6 @@ def new_transaction_endpoint():
     if 'error' in result: return jsonify(result), 400
     return jsonify({'message': 'Transaction added to mempool', 'transaction_id': result['transaction_id']}), 201
 
- @app.route('/status', methods=['GET'])
-
 
 @app.route('/status', methods=['GET'])
 def get_status():
